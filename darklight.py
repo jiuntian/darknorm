@@ -274,7 +274,7 @@ def main():
 
 def build_model():
     # args.arch：dark_light
-    model = models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
+    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
@@ -288,7 +288,7 @@ def build_model_validate():
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
-    model = models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
+    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
@@ -304,7 +304,7 @@ def build_model_continue():
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
-    model = models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
+    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
