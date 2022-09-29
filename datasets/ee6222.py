@@ -19,7 +19,7 @@ def make_dataset(root, source):
     # root:'./datasets/hmdb51_frames'
     # source:'./datasets/settings/hmdb51/train_rgb_split1.txt'
     if not os.path.exists(source):
-        print("Setting file %s for hmdb51 dataset doesn't exist." % (source))
+        print("Setting file %s for ee6222 dataset doesn't exist." % (source))
         sys.exit()
     else:
         clips = []

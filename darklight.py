@@ -145,7 +145,7 @@ def main():
         optimizer, 'min', patience=5, verbose=True)
 
     print("Saving everything to directory %s." % (saveLocation))
-    dataset = './datasets/ARID_frames'
+    dataset = f'./datasets/{args.dataset}_frames'
 
     cudnn.benchmark = True
     length = 64
@@ -249,7 +249,7 @@ def main():
         if (epoch + 1) % args.save_freq == 0:
             checkpoint_name = "%03d_%s" % (epoch + 1, "checkpoint.pth.tar")
             if is_best:
-                print("Model son iyi olarak kaydedildi")
+                print("Saved Best Model")
                 save_checkpoint({
                     'epoch': epoch + 1,
                     'arch': args.arch,
