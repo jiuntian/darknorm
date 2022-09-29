@@ -43,8 +43,8 @@ parser = argparse.ArgumentParser(description='PyTorch Two-Stream Action Recognit
 parser.add_argument('--settings', metavar='DIR', default='./datasets/settings',
                     help='path to datset setting files')
 parser.add_argument('--dataset', '-d', default='ARID',
-                    choices=["ucf101", "hmdb51", "smtV2", "window", "ARID"],
-                    help='dataset: ucf101 | hmdb51 | smtV2')
+                    choices=["ucf101", "hmdb51", "smtV2", "window", "ARID", "ee6222"],
+                    help='dataset: ucf101 | hmdb51 | smtV2 | ee6222')
 
 parser.add_argument('--arch', '-a', default='dark_light',
                     choices=model_names,
