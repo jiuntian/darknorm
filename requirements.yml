@@ -4,10 +4,13 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - opencv=4.4.0.42
+  - opencv
   - pip=21.0.1
   - python=3.8
+  - cudatoolkit=11.3
   - pytorch=1.8.1
   - torchvision=0.8.2
+  - six
   - pip:
     - tensorboardx==2.3.0
+    - protobuf==3.20

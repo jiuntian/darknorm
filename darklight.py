@@ -13,9 +13,8 @@ import argparse
 import shutil
 import numpy as np
 
-
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+# os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 import torch
 import torch.nn as nn
@@ -29,14 +28,14 @@ from torch.optim import lr_scheduler
 import video_transforms
 import models
 import datasets
-#import swats
+# import swats
 from opt.AdamW import AdamW
 
 import csv
 
 model_names = sorted(name for name in models.__dict__
-    if not name.startswith("__")
-    and callable(models.__dict__[name]))
+                     if not name.startswith("__")
+                     and callable(models.__dict__[name]))
 
 dataset_names = sorted(name for name in datasets.__all__)
 
@@ -50,8 +49,8 @@ parser.add_argument('--dataset', '-d', default='ARID',
 parser.add_argument('--arch', '-a', default='dark_light',
                     choices=model_names,
                     help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        '(default: dark_light)')
+                         ' | '.join(model_names) +
+                         '(default: dark_light)')
 
 parser.add_argument('-s', '--split', default=1, type=int, metavar='S',
                     help='which split of data to work on (default: 1)')
@@ -75,13 +74,13 @@ parser.add_argument('--save-freq', default=1, type=int,
                     metavar='N', help='save frequency (default: 1)')
 parser.add_argument('--num-seg', default=1, type=int,
                     metavar='N', help='Number of segments in dataloader (default: 1)')
-#parser.add_argument('--resume', default='./dene4', type=str, metavar='PATH',
+# parser.add_argument('--resume', default='./dene4', type=str, metavar='PATH',
 #                    help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('-c', '--continue', dest='contine', action='store_true',
                     help='continue training')
-parser.add_argument('-g','--gamma', default=1,type=float,
+parser.add_argument('-g', '--gamma', default=1, type=float,
                     help="the value of gamma")
 parser.add_argument('--both-flow', default='True',
                     help='give dark and light flow both')
@@ -97,10 +96,9 @@ def main():
     args = parser.parse_args()
     training_continue = args.contine
     if not args.no_attention:
-        args.arch='dark_light_noAttention'
+        args.arch = 'dark_light_noAttention'
 
-
-    suffix = 'ga=%s_b=%s_both_flow=%s' % (args.gamma , args.batch_size , args.both_flow)
+    suffix = 'ga=%s_b=%s_both_flow=%s' % (args.gamma, args.batch_size, args.both_flow)
     headers = ['epoch', 'top1', 'top5', 'loss']
     with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
@@ -110,48 +108,47 @@ def main():
         record = csv.writer(f)
         record.writerow(headers)
 
-    print('work in both_flow = %s, gamma = %s, batch_size = %s'%(args.both_flow, args.gamma, args.batch_size))
-    
+    print('work in both_flow = %s, gamma = %s, batch_size = %s' % (args.both_flow, args.gamma, args.batch_size))
+
     input_size = 112
     width = 170
     height = 128
 
-    saveLocation="./checkpoint/"+args.dataset+"_"+args.arch+"_split"+str(args.split)
+    saveLocation = "./checkpoint/" + args.dataset + "_" + args.arch + "_split" + str(args.split)
     if not os.path.exists(saveLocation):
         os.makedirs(saveLocation)
     writer = SummaryWriter(saveLocation)
-   
+
     # create model
 
     if args.evaluate:
         print("Building validation model ... ")
         model = build_model_validate()
-        optimizer = AdamW(model.parameters(), lr= args.lr, weight_decay=args.weight_decay)
+        optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     elif training_continue:
         model, startEpoch, optimizer, best_prec1 = build_model_continue()
         for param_group in optimizer.param_groups:
             lr = param_group['lr']
-        print("Continuing with best precision: %.3f and start epoch %d and lr: %f" %(best_prec1,startEpoch,lr))
+        print("Continuing with best precision: %.3f and start epoch %d and lr: %f" % (best_prec1, startEpoch, lr))
     else:
         print("Building model with ADAMW... ")
         model = build_model()
-        optimizer = AdamW(model.parameters(), lr= args.lr, weight_decay=args.weight_decay)
+        optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
         startEpoch = 0
 
-    
     print("Model %s is loaded. " % (args.arch))
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
-    
+
     scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', patience=5, verbose=True)
 
     print("Saving everything to directory %s." % (saveLocation))
-    dataset='./datasets/ARID_frames'
+    dataset = './datasets/ARID_frames'
 
     cudnn.benchmark = True
-    length=64
+    length = 64
     # Data transforming
     is_color = True
     scale_ratios = [1.0, 0.875, 0.75, 0.66]
@@ -162,17 +159,17 @@ def main():
                                            std=clip_std)
 
     train_transform = video_transforms.Compose([
-            video_transforms.MultiScaleCrop((input_size, input_size), scale_ratios),
-            video_transforms.RandomHorizontalFlip(),
-            video_transforms.ToTensor(),
-            normalize,
-        ])
+        video_transforms.MultiScaleCrop((input_size, input_size), scale_ratios),
+        video_transforms.RandomHorizontalFlip(),
+        video_transforms.ToTensor(),
+        normalize,
+    ])
 
     val_transform = video_transforms.Compose([
-            video_transforms.CenterCrop((input_size)),
-            video_transforms.ToTensor(),
-            normalize,
-        ])
+        video_transforms.CenterCrop((input_size)),
+        video_transforms.ToTensor(),
+        normalize,
+    ])
 
     # data loading
     train_setting_file = "train_split%d.txt" % (args.split)
@@ -181,7 +178,7 @@ def main():
     val_split_file = os.path.join(args.settings, args.dataset, val_setting_file)
     if not os.path.exists(train_split_file) or not os.path.exists(val_split_file):
         print("No split file exists in %s directory. Preprocess the dataset first" % (args.settings))
-    #ARID.py
+    # ARID.py
     train_dataset = datasets.__dict__[args.dataset](root=dataset,
                                                     modality="rgb",
                                                     source=train_split_file,
@@ -193,7 +190,7 @@ def main():
                                                     video_transform=train_transform,
                                                     num_segments=args.num_seg,
                                                     gamma=args.gamma)
-    
+
     val_dataset = datasets.__dict__[args.dataset](root=dataset,
                                                   modality="rgb",
                                                   source=val_split_file,
@@ -206,9 +203,9 @@ def main():
                                                   num_segments=args.num_seg,
                                                   gamma=args.gamma)
 
-    print('{} samples found, {} train data and {} test data.'.format(len(val_dataset)+len(train_dataset),
-                                                                           len(train_dataset),
-                                                                           len(val_dataset)))
+    print('{} samples found, {} train data and {} test data.'.format(len(val_dataset) + len(train_dataset),
+                                                                     len(train_dataset),
+                                                                     len(val_dataset)))
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -221,33 +218,33 @@ def main():
         num_workers=args.workers, pin_memory=True)
 
     if args.evaluate:
-        prec1,prec5,lossClassification = validate(val_loader, model, criterion, -1)
+        prec1, prec5, lossClassification = validate(val_loader, model, criterion, -1)
         return
 
     for epoch in range(startEpoch, args.epochs):
-#        if learning_rate_index > max_learning_rate_decay_count:
-#            break
-#        adjust_learning_rate(optimizer, epoch)
+        #        if learning_rate_index > max_learning_rate_decay_count:
+        #            break
+        #        adjust_learning_rate(optimizer, epoch)
         train(train_loader, model, criterion, optimizer, epoch)
 
         # evaluate on validation set
         prec1 = 0.0
         lossClassification = 0
         if (epoch + 1) % args.save_freq == 0:
-            prec1,prec5,lossClassification = validate(val_loader, model, criterion, epoch)
+            prec1, prec5, lossClassification = validate(val_loader, model, criterion, epoch)
             writer.add_scalar('data/top1_validation', prec1, epoch)
             writer.add_scalar('data/top3_validation', prec5, epoch)
             writer.add_scalar('data/classification_loss_validation', lossClassification, epoch)
             scheduler.step(lossClassification)
         # remember best prec@1 and save checkpoint
-        
+
         is_best = prec1 >= best_prec1
         best_prec1 = max(prec1, best_prec1)
-#        best_in_existing_learning_rate = max(prec1, best_in_existing_learning_rate)
-#        
-#        if best_in_existing_learning_rate > prec1 + 1:
-#            learning_rate_index = learning_rate_index 
-#            best_in_existing_learning_rate = 0        
+        #        best_in_existing_learning_rate = max(prec1, best_in_existing_learning_rate)
+        #
+        #        if best_in_existing_learning_rate > prec1 + 1:
+        #            learning_rate_index = learning_rate_index
+        #            best_in_existing_learning_rate = 0
 
         if (epoch + 1) % args.save_freq == 0:
             checkpoint_name = "%03d_%s" % (epoch + 1, "checkpoint.pth.tar")
@@ -259,9 +256,9 @@ def main():
                     'state_dict': model.state_dict(),
                     'best_prec1': best_prec1,
                     'best_loss': best_loss,
-                    'optimizer' : optimizer.state_dict(),
+                    'optimizer': optimizer.state_dict(),
                 }, is_best, checkpoint_name, saveLocation)
-    
+
     checkpoint_name = "%03d_%s" % (epoch + 1, "checkpoint.pth.tar")
     save_checkpoint({
         'epoch': epoch + 1,
@@ -269,63 +266,65 @@ def main():
         'state_dict': model.state_dict(),
         'best_prec1': best_prec1,
         'best_loss': best_loss,
-        'optimizer' : optimizer.state_dict(),
+        'optimizer': optimizer.state_dict(),
     }, is_best, checkpoint_name, saveLocation)
     writer.export_scalars_to_json("./all_scalars.json")
     writer.close()
 
+
 def build_model():
-    #args.arch：dark_light
+    # args.arch：dark_light
     model = models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
-    
+
     if torch.cuda.device_count() > 1:
-        model=torch.nn.DataParallel(model)
+        model = torch.nn.DataParallel(model)
     model = model.cuda()
-    
+
     return model
 
+
 def build_model_validate():
-    modelLocation="./checkpoint/"+args.dataset+"_"+args.arch+"_split"+str(args.split)
-    model_path = os.path.join(modelLocation,'model_best.pth.tar') 
+    modelLocation = "./checkpoint/" + args.dataset + "_" + args.arch + "_split" + str(args.split)
+    model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
-    model=models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
-   
+    model = models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
+
     if torch.cuda.device_count() > 1:
-        model=torch.nn.DataParallel(model) 
+        model = torch.nn.DataParallel(model)
 
     model.load_state_dict(params['state_dict'])
     model.cuda()
-    model.eval() 
+    model.eval()
     return model
 
+
 def build_model_continue():
-    modelLocation="./checkpoint/"+args.dataset+"_"+args.arch+"_split"+str(args.split)
-    model_path = os.path.join(modelLocation,'model_best.pth.tar') 
+    modelLocation = "./checkpoint/" + args.dataset + "_" + args.arch + "_split" + str(args.split)
+    model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
-    model=models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
-   
+    model = models.__dict__[args.arch](num_classes=11, length=args.num_seg, both_flow=args.both_flow)
+
     if torch.cuda.device_count() > 1:
-        model=torch.nn.DataParallel(model) 
-        
+        model = torch.nn.DataParallel(model)
+
     model.load_state_dict(params['state_dict'])
     model = model.cuda()
-    optimizer = AdamW(model.parameters(), lr= args.lr, weight_decay=args.weight_decay)
+    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     optimizer.load_state_dict(params['optimizer'])
-    
+
     startEpoch = params['epoch']
     best_prec = params['best_prec1']
     return model, startEpoch, optimizer, best_prec
 
 
-#进入
+# 进入
 def train(train_loader, model, criterion, optimizer, epoch):
     batch_time = AverageMeter()
     lossesClassification = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
-    
 
     # switch to train mode
     model.train()
@@ -335,16 +334,16 @@ def train(train_loader, model, criterion, optimizer, epoch):
     loss_mini_batch_classification = 0.0
     acc_mini_batch = 0.0
     acc_mini_batch_top3 = 0.0
-    totalSamplePerIter=0
+    totalSamplePerIter = 0
     for i, (inputs, inputs_light, targets) in enumerate(train_loader):
-        inputs=inputs.view(-1,length,3,input_size,input_size).transpose(1,2)
-        inputs_light=inputs_light.view(-1,length,3,input_size,input_size).transpose(1,2)
+        inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+        inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
 
         inputs = inputs.cuda()
         inputs_light = inputs_light.cuda()
 
         targets = targets.cuda()
-        output= model((inputs,inputs_light))
+        output = model((inputs, inputs_light))
 
         prec1, prec5 = accuracy(output.data, targets, topk=(1, 5))
         acc_mini_batch += prec1.item()
@@ -353,37 +352,40 @@ def train(train_loader, model, criterion, optimizer, epoch):
         lossClassification = criterion(output, targets)
         lossClassification = lossClassification / args.iter_size
 
-        totalLoss=lossClassification
+        totalLoss = lossClassification
         loss_mini_batch_classification += lossClassification.data.item()
         totalLoss.backward()
-        totalSamplePerIter +=  output.size(0)
-        if (i+1) % args.iter_size == 0:
+        totalSamplePerIter += output.size(0)
+        if (i + 1) % args.iter_size == 0:
             # compute gradient and do SGD step
             optimizer.step()
             optimizer.zero_grad()
             lossesClassification.update(loss_mini_batch_classification, totalSamplePerIter)
-            top1.update(acc_mini_batch/args.iter_size, totalSamplePerIter)
-            top5.update(acc_mini_batch_top3/args.iter_size, totalSamplePerIter)
+            top1.update(acc_mini_batch / args.iter_size, totalSamplePerIter)
+            top5.update(acc_mini_batch_top3 / args.iter_size, totalSamplePerIter)
             batch_time.update(time.time() - end)
             end = time.time()
             loss_mini_batch_classification = 0
             acc_mini_batch = 0
             acc_mini_batch_top3 = 0.0
             totalSamplePerIter = 0.0
-            #scheduler.step()
-            
-        if (i+1) % args.print_freq == 0:
-            print('[%d] time: %.3f loss: %.4f' %(i,batch_time.avg,lossesClassification.avg))
-          
-    print('train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Classification Loss {lossClassification.avg:.4f}\n'
-          .format(epoch = epoch, top1=top1, top5=top5, lossClassification=lossesClassification))
+            # scheduler.step()
+
+        if (i + 1) % args.print_freq == 0:
+            print('[%d] time: %.3f loss: %.4f' % (i, batch_time.avg, lossesClassification.avg))
+
+    print(
+        'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Classification Loss {lossClassification.avg:.4f}\n'
+        .format(epoch=epoch, top1=top1, top5=top5, lossClassification=lossesClassification))
     with open('train_record_%s.csv' % suffix, 'a', newline='') as f:
         record = csv.writer(f)
         record.writerow([epoch, round(top1.avg, 3), round(top5.avg, 3), round(lossesClassification.avg, 4)])
     writer.add_scalar('data/classification_loss_training', lossesClassification.avg, epoch)
     writer.add_scalar('data/top1_training', top1.avg, epoch)
     writer.add_scalar('data/top3_training', top5.avg, epoch)
-def validate(val_loader, model, criterion,epoch):
+
+
+def validate(val_loader, model, criterion, epoch):
     batch_time = AverageMeter()
     lossesClassification = AverageMeter()
     top1 = AverageMeter()
@@ -394,37 +396,38 @@ def validate(val_loader, model, criterion,epoch):
     end = time.time()
     with torch.no_grad():
         for i, (inputs, inputs_light, targets) in enumerate(val_loader):
-            inputs=inputs.view(-1,length,3,input_size,input_size).transpose(1,2)
-            inputs_light=inputs_light.view(-1,length,3,input_size,input_size).transpose(1,2)
+            inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+            inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
 
             inputs = inputs.cuda()
             inputs_light = inputs_light.cuda()
             targets = targets.cuda()
-    
+
             # compute output
-            output = model((inputs,inputs_light))
-            
+            output = model((inputs, inputs_light))
+
             lossClassification = criterion(output, targets)
-    
+
             # measure accuracy and record loss
             prec1, prec5 = accuracy(output.data, targets, topk=(1, 5))
-            
+
             lossesClassification.update(lossClassification.data.item(), output.size(0))
-            
+
             top1.update(prec1.item(), output.size(0))
             top5.update(prec5.item(), output.size(0))
-    
+
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-    
-    
-        print('validate * * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Classification Loss {lossClassification.avg:.4f}\n'
-              .format(top1=top1, top5=top5, lossClassification=lossesClassification))
+
+        print(
+            'validate * * Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Classification Loss {lossClassification.avg:.4f}\n'
+            .format(top1=top1, top5=top5, lossClassification=lossesClassification))
         with open('validate_record_%s.csv' % suffix, 'a', newline='') as f:
             record = csv.writer(f)
-            record.writerow([epoch, round(top1.avg,3), round(top5.avg,3), round(lossesClassification.avg,4)])
+            record.writerow([epoch, round(top1.avg, 3), round(top5.avg, 3), round(lossesClassification.avg, 4)])
     return top1.avg, top5.avg, lossesClassification.avg
+
 
 def save_checkpoint(state, is_best, filename, resume_path):
     cur_path = os.path.join(resume_path, filename)
@@ -433,8 +436,10 @@ def save_checkpoint(state, is_best, filename, resume_path):
     if is_best:
         shutil.copyfile(cur_path, best_path)
 
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -450,6 +455,7 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
 
+
 def adjust_learning_rate(optimizer, epoch):
     """Sets the learning rate to the initial LR decayed by 10 every 150 epochs"""
 
@@ -458,33 +464,36 @@ def adjust_learning_rate(optimizer, epoch):
     print("Current learning rate is %4.6f:" % lr)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-        
+
+
 def adjust_learning_rate2(optimizer, epoch):
-    isWarmUp=epoch < warmUpEpoch
-    decayRate=0.2
+    isWarmUp = epoch < warmUpEpoch
+    decayRate = 0.2
     if isWarmUp:
-        lr=args.lr*(epoch+1)/warmUpEpoch
+        lr = args.lr * (epoch + 1) / warmUpEpoch
     else:
-        lr=args.lr*(1/(1+(epoch+1-warmUpEpoch)*decayRate))
-    
-    #decay = 0.1 ** (sum(epoch >= np.array(args.lr_steps)))
+        lr = args.lr * (1 / (1 + (epoch + 1 - warmUpEpoch) * decayRate))
+
+    # decay = 0.1 ** (sum(epoch >= np.array(args.lr_steps)))
     print("Current learning rate is %4.6f:" % lr)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-        
+
+
 def adjust_learning_rate3(optimizer, epoch):
-    isWarmUp=epoch < warmUpEpoch
-    decayRate=0.97
+    isWarmUp = epoch < warmUpEpoch
+    decayRate = 0.97
     if isWarmUp:
-        lr=args.lr*(epoch+1)/warmUpEpoch
+        lr = args.lr * (epoch + 1) / warmUpEpoch
     else:
-        lr = args.lr * decayRate**(epoch+1-warmUpEpoch)
-    
-    #decay = 0.1 ** (sum(epoch >= np.array(args.lr_steps)))
+        lr = args.lr * decayRate ** (epoch + 1 - warmUpEpoch)
+
+    # decay = 0.1 ** (sum(epoch >= np.array(args.lr_steps)))
     print("Current learning rate is %4.6f:" % lr)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-        
+
+
 def adjust_learning_rate4(optimizer, learning_rate_index):
     """Sets the learning rate to the initial LR decayed by 10 every 150 epochs"""
 
@@ -493,7 +502,8 @@ def adjust_learning_rate4(optimizer, learning_rate_index):
     print("Current learning rate is %4.8f:" % lr)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-        
+
+
 def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
@@ -508,6 +518,7 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].contiguous().view(-1).float().sum(0)
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
+
 
 if __name__ == '__main__':
     main()
