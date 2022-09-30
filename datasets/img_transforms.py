@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+
 def gamma_intensity_correction(img, gamma):
     """
     :param img: the img of input
@@ -13,3 +14,16 @@ def gamma_intensity_correction(img, gamma):
     gamma_img = cv2.LUT(img, LU_table)
     return gamma_img
 
+
+def histogram_normalization(img):
+    """
+    :param img: input image
+    """
+    r, g, b = cv2.split(img)
+
+    output_r = cv2.equalizeHist(r)
+    output_g = cv2.equalizeHist(g)
+    output_b = cv2.equalizeHist(b)
+
+    equ = cv2.merge((output_r, output_g, output_b))
+    return equ

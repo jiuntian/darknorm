@@ -19,7 +19,7 @@ import torchvision.models as models
 
 sys.path.insert(0, "../../")
 import video_transforms
-from datasets import img_to_gamma
+from datasets import img_transforms
 
 soft=nn.Softmax(dim=1)
 def VideoSpatialPrediction3D_attention(

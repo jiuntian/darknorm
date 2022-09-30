@@ -5,7 +5,7 @@ import sys
 import random
 import numpy as np
 import cv2
-from . import img_to_gamma
+from . import img_transforms
 
 
 def find_classes(dir):
@@ -68,7 +68,7 @@ def ReadSegmentRGB(path, offsets, new_height, new_width, new_length, is_color, n
     return clip_input
 
 
-def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration, gamma):
+def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration, gamma, method):
     if is_color:
         cv_read_flag = cv2.IMREAD_COLOR  # > 0
     else:
@@ -87,7 +87,15 @@ def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_co
             frame_path = path + "/" + frame_name
             cv_img_origin = cv2.imread(frame_path, cv_read_flag)
             #####
-            cv_img_origin = img_to_gamma.gamma_intensity_correction(cv_img_origin, gamma)
+            if method == 'gamma':
+                cv_img_origin = img_transforms.gamma_intensity_correction(cv_img_origin, gamma)
+            elif method == 'histogram':
+                cv_img_origin = img_transforms.histogram_normalization(cv_img_origin)
+            elif method == 'gamma_histogram':
+                cv_img_origin = img_transforms.gamma_intensity_correction(cv_img_origin, gamma)
+                cv_img_origin = img_transforms.histogram_normalization(cv_img_origin)
+            else:
+                raise NotImplementedError(f'method {method} not defined')
             #####
             if cv_img_origin is None:
                 print("Could not load file %s" % (frame_path))
@@ -159,7 +167,8 @@ class EE6222(data.Dataset):
                  target_transform=None,
                  video_transform=None,
                  ensemble_training=False,
-                 gamma=None):
+                 gamma=None,
+                 method='gamma'):
 
         classes, class_to_idx = find_classes(root)
         clips = make_dataset(root, source)
@@ -197,6 +206,7 @@ class EE6222(data.Dataset):
         self.transform = transform
         self.target_transform = target_transform
         self.video_transform = video_transform
+        self.method = method
 
     def __getitem__(self, index):
         path, duration, target = self.clips[index]
@@ -249,7 +259,8 @@ class EE6222(data.Dataset):
                                                     self.is_color,
                                                     self.name_pattern,
                                                     duration,
-                                                    gamma=self.gamma
+                                                    gamma=self.gamma,
+                                                    method=self.method
                                                     )
         else:
             print("No such modality %s" % (self.modality))

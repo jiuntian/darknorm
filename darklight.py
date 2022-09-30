@@ -85,6 +85,8 @@ parser.add_argument('-g', '--gamma', default=1, type=float,
 parser.add_argument('--both-flow', default='True',
                     help='give dark and light flow both')
 parser.add_argument('--no-attention', default=True, action='store_false', help="use attention to instead of linear")
+parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'histogram', 'gamma_histogram'],
+                    help='method of light flow')
 
 best_prec1 = 0
 best_loss = 30
@@ -98,7 +100,7 @@ def main():
     if not args.no_attention:
         args.arch = 'dark_light_noAttention'
 
-    suffix = 'ga=%s_b=%s_both_flow=%s' % (args.gamma, args.batch_size, args.both_flow)
+    suffix = 'method=%s_ga=%s_b=%s_both_flow=%s' % (args.method, args.gamma, args.batch_size, args.both_flow)
     headers = ['epoch', 'top1', 'top5', 'loss']
     with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
@@ -114,7 +116,7 @@ def main():
     width = 170
     height = 128
 
-    saveLocation = "./checkpoint/" + args.dataset + "_" + args.arch + "_split" + str(args.split)
+    saveLocation = f"./checkpoint/{args.method}_{args.dataset}_{args.arch}_split{str(args.split)}"
     if not os.path.exists(saveLocation):
         os.makedirs(saveLocation)
     writer = SummaryWriter(saveLocation)
@@ -189,7 +191,8 @@ def main():
                                                     new_height=height,
                                                     video_transform=train_transform,
                                                     num_segments=args.num_seg,
-                                                    gamma=args.gamma)
+                                                    gamma=args.gamma,
+                                                    method=args.method)
 
     val_dataset = datasets.__dict__[args.dataset](root=dataset,
                                                   modality="rgb",
@@ -201,7 +204,8 @@ def main():
                                                   new_height=height,
                                                   video_transform=val_transform,
                                                   num_segments=args.num_seg,
-                                                  gamma=args.gamma)
+                                                  gamma=args.gamma,
+                                                  method=args.method)
 
     print('{} samples found, {} train data and {} test data.'.format(len(val_dataset) + len(train_dataset),
                                                                      len(train_dataset),
@@ -375,7 +379,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
             print('[%d] time: %.3f loss: %.4f' % (i, batch_time.avg, lossesClassification.avg))
 
     print(
-        'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Classification Loss {lossClassification.avg:.4f}\n'
+        'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Classification Loss {lossClassification.avg:.4f}'
         .format(epoch=epoch, top1=top1, top5=top5, lossClassification=lossesClassification))
     with open('train_record_%s.csv' % suffix, 'a', newline='') as f:
         record = csv.writer(f)
