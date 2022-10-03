@@ -28,6 +28,7 @@ from torch.optim import lr_scheduler
 import video_transforms
 import models
 import datasets
+from loss import ArcFaceLoss
 # import swats
 from opt.AdamW import AdamW
 
@@ -87,6 +88,7 @@ parser.add_argument('--both-flow', default='True',
 parser.add_argument('--no-attention', default=True, action='store_false', help="use attention to instead of linear")
 parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'histogram', 'gamma_histogram'],
                     help='method of light flow')
+parser.add_argument('--loss', default='ce', type=str, help='loss [ce, arcface]')
 
 best_prec1 = 0
 best_loss = 30
@@ -141,7 +143,12 @@ def main():
     print("Model %s is loaded. " % (args.arch))
 
     # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda()
+    if args.loss == "arcface":
+        criterion = ArcFaceLoss().cuda()
+    elif args.loss == 'ce':
+        criterion = nn.CrossEntropyLoss().cuda()
+    else:
+        raise NotImplementedError('Invalid loss specified')
 
     scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', patience=5, verbose=True)
