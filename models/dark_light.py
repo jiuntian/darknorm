@@ -36,7 +36,7 @@ class CosSim(nn.Module):
 
 class dark_light_arcface(nn.Module):
     def __init__(self, num_classes, length, both_flow):
-        super(dark_light, self).__init__()
+        super(dark_light_arcface, self).__init__()
         self.hidden_size = 512
         self.n_layers = 1
         self.attn_heads = 8
