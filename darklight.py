@@ -69,7 +69,7 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum (default: 0.9)')
 parser.add_argument('--weight-decay', '--wd', default=1e-3, type=float,
                     metavar='W', help='weight decay (default: 1e-3)')
-parser.add_argument('--print-freq', default=50, type=int,
+parser.add_argument('--print-freq', default=100, type=int,
                     metavar='N', help='print frequency (default: 400)')
 parser.add_argument('--save-freq', default=1, type=int,
                     metavar='N', help='save frequency (default: 1)')
@@ -102,7 +102,7 @@ def main():
     if not args.no_attention:
         args.arch = 'dark_light_noAttention'
 
-    suffix = 'method=%s_ga=%s_b=%s_both_flow=%s' % (args.method, args.gamma, args.batch_size, args.both_flow)
+    suffix = f"method={args.method}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_both_flow={args.both_flow}"
     headers = ['epoch', 'top1', 'top5', 'loss']
     with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
@@ -112,13 +112,13 @@ def main():
         record = csv.writer(f)
         record.writerow(headers)
 
-    print('work in both_flow = %s, gamma = %s, batch_size = %s' % (args.both_flow, args.gamma, args.batch_size))
+    print(f'work in {suffix}')
 
     input_size = 112
     width = 170
     height = 128
 
-    saveLocation = f"./checkpoint/{args.method}_{args.dataset}_{args.arch}_split{str(args.split)}"
+    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}_split{str(args.split)}"
     if not os.path.exists(saveLocation):
         os.makedirs(saveLocation)
     writer = SummaryWriter(saveLocation)
