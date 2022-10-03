@@ -14,16 +14,16 @@ class CosSim(nn.Module):
         self.nclass = nclass
         self.learn_cent = learn_cent
 
-        self.centroids = nn.Parameter(torch.randn(nclass, nfeat))
+        self.weight = nn.Parameter(torch.randn(nclass, nfeat))
         if not learn_cent:
-            self.centroids.requires_grad_(False)
+            self.weight.requires_grad_(False)
 
     def forward(self, x):
         norms = torch.norm(x, p=2, dim=-1, keepdim=True)
         nfeat = torch.div(x, norms)
 
-        norms_c = torch.norm(self.centroids, p=2, dim=-1, keepdim=True)
-        ncenters = torch.div(self.centroids, norms_c)
+        norms_c = torch.norm(self.weight, p=2, dim=-1, keepdim=True)
+        ncenters = torch.div(self.weight, norms_c)
         logits = torch.matmul(nfeat, torch.transpose(ncenters, 0, 1))
 
         return logits
@@ -63,7 +63,7 @@ class dark_light_arcface(nn.Module):
             param.requires_grad = True
 
         torch.nn.init.xavier_uniform_(self.fc_action.weight)
-        self.fc_action.bias.data.zero_()
+        # self.fc_action.bias.data.zero_()
 
     def forward(self, x):
         if self.both_flow == 'True':
