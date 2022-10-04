@@ -9,6 +9,7 @@ import math
 import os, sys
 import collections
 
+
 class Compose(object):
     """Composes several video_transforms together.
 

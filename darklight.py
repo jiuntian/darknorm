@@ -28,7 +28,7 @@ from torch.optim import lr_scheduler
 import video_transforms
 import models
 import datasets
-from loss import ArcFaceLoss
+from loss import ArcFaceLoss, CosineLoss, SupSimClrLoss
 # import swats
 from opt.AdamW import AdamW
 
@@ -69,7 +69,7 @@ parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum (default: 0.9)')
 parser.add_argument('--weight-decay', '--wd', default=1e-3, type=float,
                     metavar='W', help='weight decay (default: 1e-3)')
-parser.add_argument('--print-freq', default=100, type=int,
+parser.add_argument('--print-freq', default=50, type=int,
                     metavar='N', help='print frequency (default: 400)')
 parser.add_argument('--save-freq', default=1, type=int,
                     metavar='N', help='save frequency (default: 1)')
@@ -147,6 +147,10 @@ def main():
         criterion = ArcFaceLoss().cuda()
     elif args.loss == 'ce':
         criterion = nn.CrossEntropyLoss().cuda()
+    elif args.loss == 'cosine':
+        criterion = CosineLoss().cuda()
+    elif args.loss == 'simclr':
+        criterion = SupSimClrLoss().cuda()
     else:
         raise NotImplementedError('Invalid loss specified')
 
@@ -356,12 +360,15 @@ def train(train_loader, model, criterion, optimizer, epoch):
         targets = targets.cuda()
         output = model((inputs, inputs_light))
 
+        lossClassification = criterion(output, targets)
+        lossClassification = lossClassification / args.iter_size
+
+        if len(output) > 1:
+            output = output[0]
+
         prec1, prec5 = accuracy(output.data, targets, topk=(1, 5))
         acc_mini_batch += prec1.item()
         acc_mini_batch_top3 += prec5.item()
-
-        lossClassification = criterion(output, targets)
-        lossClassification = lossClassification / args.iter_size
 
         totalLoss = lossClassification
         loss_mini_batch_classification += lossClassification.data.item()
@@ -420,6 +427,8 @@ def validate(val_loader, model, criterion, epoch):
             lossClassification = criterion(output, targets)
 
             # measure accuracy and record loss
+            if len(output) > 1:
+                output = output[0]
             prec1, prec5 = accuracy(output.data, targets, topk=(1, 5))
 
             lossesClassification.update(lossClassification.data.item(), output.size(0))
