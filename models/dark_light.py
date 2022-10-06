@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torchvision.models.video import r2plus1d_18, R2Plus1D_18_Weights
 from .BERT.self_attention import self_attention
 
 from .r2plus1d import r2plus1d_34_32_ig65m
@@ -15,16 +16,18 @@ class dark_light_simclr(nn.Module):
         self.attn_heads = 8
         self.num_classes = num_classes
         self.length = length
-        self.dp = nn.Dropout(p=0.8)
+        self.dp = nn.Dropout(p=0.5)
         self.both_flow = both_flow
         self.simclr_embedding = 128
 
-        self.avgpool = nn.AvgPool3d((8, 7, 7), stride=1)
+        self.avgpool = nn.AvgPool3d((1, 7, 7), stride=1)
+        self.nobertpool = nn.AdaptiveAvgPool3d(1)
         # load pretrained model
         self.features = nn.Sequential(*list(
-            r2plus1d_34_32_ig65m(359, pretrained=True, progress=True).children())[:-2])
+            r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1, progress=True).children())[:-2])
         self.simclr_proj = nn.Linear(self.hidden_size, self.simclr_embedding)
-        self.fc_action = nn.Linear(self.hidden_size, num_classes)
+        self.fc_action = nn.Linear(self.simclr_embedding * 2, num_classes)
+        # self.fc_action = nn.Linear(self.hidden_size, num_classes)
 
         assert self.both_flow == 'True', f'Simclr required both flow, current set as {self.both_flow}'
 
@@ -40,19 +43,24 @@ class dark_light_simclr(nn.Module):
 
         x = self.features(x)  # x(b,512,8,7,7)
         x_light = self.features(x_light)  # x(b,512,8,7,7)
+
         x = self.avgpool(x)  # b,512,8,1,1
+        x = self.nobertpool(x)
         x = x.view(x.size(0), self.hidden_size)  # x(b,512)
 
         x_light = self.avgpool(x_light)  # b,512,8,1,1
+        x_light = self.nobertpool(x_light)
         x_light = x_light.view(x_light.size(0), self.hidden_size)  # x(b,512)
 
         x_proj = self.simclr_proj(x)
         x_light_proj = self.simclr_proj(x_light)
 
-        # x_proj_cat = torch.cat((x_proj, x_light_proj), 1)
-
-        logits = self.fc_action(x)  # b,11
+        # x_cat = torch.cat((x, x_light), 1)
+        x_cat = torch.cat((x_proj, x_light_proj), 1)
+        # x_proj = self.dp(x_proj)
+        logits = self.fc_action(x_cat)  # b,11
         return logits, x_proj, x_light_proj
+        # return logits, x, x_light
 
 
 class CosSim(nn.Module):
