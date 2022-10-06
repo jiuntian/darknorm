@@ -10,6 +10,8 @@ class SupSimClrLoss(nn.Module):
 
     def forward(self, outputs, labels):
         logits, x_proj, x_light_proj = outputs
+        x_proj = F.normalize(x_proj, dim=1)
+        x_light_proj = F.normalize(x_light_proj, dim=1)
         x_cat = torch.stack([x_proj, x_light_proj], 1)
         loss_simclr = self.supconloss(x_cat, labels)
 
@@ -99,7 +101,7 @@ class SupConLoss(nn.Module):
         log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True) + 1e-6)
 
         # compute mean of log-likelihood over positive
-        mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1) + 1e-6)
+        mean_log_prob_pos = (mask * log_prob).sum(1) / (mask.sum(1))
 
         # loss
         loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
