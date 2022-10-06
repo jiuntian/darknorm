@@ -27,6 +27,7 @@ class dark_light_simclr(nn.Module):
             r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1, progress=True).children())[:-2])
         self.simclr_proj = nn.Linear(self.hidden_size, self.simclr_embedding)
         self.fc_action = nn.Linear(self.simclr_embedding * 2, num_classes)
+        self.bn = nn.BatchNorm1d(self.simclr_embedding)
         # self.fc_action = nn.Linear(self.hidden_size, num_classes)
 
         assert self.both_flow == 'True', f'Simclr required both flow, current set as {self.both_flow}'
@@ -53,7 +54,9 @@ class dark_light_simclr(nn.Module):
         x_light = x_light.view(x_light.size(0), self.hidden_size)  # x(b,512)
 
         x_proj = self.simclr_proj(x)
+        x_proj = self.bn(x_proj)
         x_light_proj = self.simclr_proj(x_light)
+        x_light_proj = self.bn(x_light_proj)
 
         # x_cat = torch.cat((x, x_light), 1)
         x_cat = torch.cat((x_proj, x_light_proj), 1)
