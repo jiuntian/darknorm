@@ -166,8 +166,10 @@ def main():
     # Data transforming
     is_color = True
     scale_ratios = [1.0, 0.875, 0.75, 0.66]
-    clip_mean = [0.485, 0.456, 0.406] * args.num_seg * length
-    clip_std = [0.229, 0.224, 0.225] * args.num_seg * length
+    # clip_mean = [0.485, 0.456, 0.406] * args.num_seg * length
+    # clip_std = [0.229, 0.224, 0.225] * args.num_seg * length
+    clip_mean = [0.0702773, 0.06571121, 0.06437492] * args.num_seg * length
+    clip_std = [0.08475896, 0.08116068, 0.07479476] * args.num_seg * length
 
     normalize = video_transforms.Normalize(mean=clip_mean,
                                            std=clip_std)

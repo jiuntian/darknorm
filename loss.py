@@ -17,7 +17,7 @@ class SupSimClrLoss(nn.Module):
 
         loss_ce = F.cross_entropy(logits, labels)
 
-        loss = 0.1 * loss_simclr + loss_ce
+        loss = 1. * loss_simclr + loss_ce
         return loss
 
 

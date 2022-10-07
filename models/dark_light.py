@@ -5,12 +5,12 @@ from .BERT.self_attention import self_attention
 
 from .r2plus1d import r2plus1d_34_32_ig65m
 
-__all__ = ['dark_light_simclr', 'dark_light_arcface', 'dark_light', 'dark_light_noAttention']
+__all__ = ['dark_light_simclr_r34', 'dark_light_simclr', 'dark_light_arcface', 'dark_light', 'dark_light_noAttention']
 
 
-class dark_light_simclr(nn.Module):
+class dark_light_simclr_r34(nn.Module):
     def __init__(self, num_classes, length, both_flow):
-        super(dark_light_simclr, self).__init__()
+        super(dark_light_simclr_r34, self).__init__()
         self.hidden_size = 512
         self.n_layers = 1
         self.attn_heads = 8
@@ -23,11 +23,16 @@ class dark_light_simclr(nn.Module):
         self.avgpool = nn.AvgPool3d((1, 7, 7), stride=1)
         self.nobertpool = nn.AdaptiveAvgPool3d(1)
         # load pretrained model
+        # self.features = nn.Sequential(*list(
+        #     r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1, progress=True).children())[:-2])
         self.features = nn.Sequential(*list(
-            r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1, progress=True).children())[:-2])
-        self.simclr_proj = nn.Linear(self.hidden_size, self.simclr_embedding)
-        self.fc_action = nn.Linear(self.simclr_embedding * 2, num_classes)
-        self.bn = nn.BatchNorm1d(self.simclr_embedding)
+            r2plus1d_34_32_ig65m(359, pretrained=True, progress=True).children())[:-2])
+        # self.simclr_proj = nn.Sequential(
+        #     nn.Linear(self.hidden_size, self.hidden_size // 2),
+        #     nn.Linear(self.hidden_size // 2, self.simclr_embedding)
+        # )
+        self.fc_action = nn.Linear(self.hidden_size * 2, num_classes)
+        # self.bn = nn.BatchNorm1d(self.simclr_embedding)
         # self.fc_action = nn.Linear(self.hidden_size, num_classes)
 
         assert self.both_flow == 'True', f'Simclr required both flow, current set as {self.both_flow}'
@@ -53,17 +58,80 @@ class dark_light_simclr(nn.Module):
         x_light = self.nobertpool(x_light)
         x_light = x_light.view(x_light.size(0), self.hidden_size)  # x(b,512)
 
-        x_proj = self.simclr_proj(x)
-        x_proj = self.bn(x_proj)
-        x_light_proj = self.simclr_proj(x_light)
-        x_light_proj = self.bn(x_light_proj)
+        # x_proj = self.simclr_proj(x)
+        # x_proj = self.bn(x_proj)
+        # x_light_proj = self.simclr_proj(x_light)
+        # x_light_proj = self.bn(x_light_proj)
 
-        # x_cat = torch.cat((x, x_light), 1)
-        x_cat = torch.cat((x_proj, x_light_proj), 1)
+        x_cat = torch.cat((x, x_light), 1)
+        # x_cat = torch.cat((x_proj, x_light_proj), 1)
         # x_proj = self.dp(x_proj)
         logits = self.fc_action(x_cat)  # b,11
-        return logits, x_proj, x_light_proj
-        # return logits, x, x_light
+        # return logits, x_proj, x_light_proj
+        return logits, x, x_light
+
+
+class dark_light_simclr(nn.Module):
+    def __init__(self, num_classes, length, both_flow):
+        super(dark_light_simclr, self).__init__()
+        self.hidden_size = 512
+        self.n_layers = 1
+        self.attn_heads = 8
+        self.num_classes = num_classes
+        self.length = length
+        self.dp = nn.Dropout(p=0.5)
+        self.both_flow = both_flow
+        self.simclr_embedding = 128
+
+        self.avgpool = nn.AvgPool3d((1, 7, 7), stride=1)
+        self.nobertpool = nn.AdaptiveAvgPool3d(1)
+        # load pretrained model
+        self.features = nn.Sequential(*list(
+            r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1, progress=True).children())[:-2])
+        # self.features = nn.Sequential(*list(
+        #     r2plus1d_34_32_ig65m(359, pretrained=True, progress=True).children())[:-2])
+        # self.simclr_proj = nn.Sequential(
+        #     nn.Linear(self.hidden_size, self.hidden_size // 2),
+        #     nn.Linear(self.hidden_size // 2, self.simclr_embedding)
+        # )
+        self.fc_action = nn.Linear(self.hidden_size * 2, num_classes)
+        # self.bn = nn.BatchNorm1d(self.simclr_embedding)
+        # self.fc_action = nn.Linear(self.hidden_size, num_classes)
+
+        assert self.both_flow == 'True', f'Simclr required both flow, current set as {self.both_flow}'
+
+        for param in self.features.parameters():
+            param.requires_grad = True
+
+        torch.nn.init.xavier_uniform_(self.fc_action.weight)
+        self.fc_action.bias.data.zero_()
+
+    def forward(self, x):
+        # (b,3,64,112,112)
+        x, x_light = x
+
+        x = self.features(x)  # x(b,512,8,7,7)
+        x_light = self.features(x_light)  # x(b,512,8,7,7)
+
+        x = self.avgpool(x)  # b,512,8,1,1
+        x = self.nobertpool(x)
+        x = x.view(x.size(0), self.hidden_size)  # x(b,512)
+
+        x_light = self.avgpool(x_light)  # b,512,8,1,1
+        x_light = self.nobertpool(x_light)
+        x_light = x_light.view(x_light.size(0), self.hidden_size)  # x(b,512)
+
+        # x_proj = self.simclr_proj(x)
+        # x_proj = self.bn(x_proj)
+        # x_light_proj = self.simclr_proj(x_light)
+        # x_light_proj = self.bn(x_light_proj)
+
+        x_cat = torch.cat((x, x_light), 1)
+        # x_cat = torch.cat((x_proj, x_light_proj), 1)
+        # x_proj = self.dp(x_proj)
+        logits = self.fc_action(x_cat)  # b,11
+        # return logits, x_proj, x_light_proj
+        return logits, x, x_light
 
 
 class CosSim(nn.Module):
