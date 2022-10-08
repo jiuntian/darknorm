@@ -90,6 +90,7 @@ parser.add_argument('--no-attention', default=True, action='store_false', help="
 parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'histogram', 'gamma_histogram'],
                     help='method of light flow')
 parser.add_argument('--loss', default='ce', type=str, help='loss [ce, arcface]')
+parser.add_argument('--tag', default='', type=str, help='tag')
 
 best_prec1 = 0
 best_loss = 30
@@ -103,7 +104,7 @@ def main():
     if not args.no_attention:
         args.arch = 'dark_light_noAttention'
 
-    suffix = f"method={args.method}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_both_flow={args.both_flow}"
+    suffix = f"method={args.method}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_both_flow={args.both_flow}_{args.tag}"
     headers = ['epoch', 'top1', 'top5', 'loss']
     with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
@@ -119,7 +120,7 @@ def main():
     width = 170
     height = 128
 
-    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}_split{str(args.split)}"
+    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}_split{str(args.split)}_{args.tag}"
     if not os.path.exists(saveLocation):
         os.makedirs(saveLocation)
     writer = SummaryWriter(saveLocation)
