@@ -72,7 +72,7 @@ class dark_light_simclr_r34(nn.Module):
 
 
 class dark_light_simclr(nn.Module):
-    def __init__(self, num_classes, length, both_flow):
+    def __init__(self, num_classes, length, both_flow, backbone='r34'):
         super(dark_light_simclr, self).__init__()
         self.hidden_size = 512
         self.n_layers = 1
@@ -82,19 +82,24 @@ class dark_light_simclr(nn.Module):
         self.dp = nn.Dropout(p=0.5)
         self.both_flow = both_flow
         self.simclr_embedding = 128
+        self.backbone = backbone
 
         self.avgpool = nn.AvgPool3d((1, 7, 7), stride=1)
         self.nobertpool = nn.AdaptiveAvgPool3d(1)
         # load pretrained model
-        self.features = nn.Sequential(*list(
-            r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1, progress=True).children())[:-2])
-        # self.features = nn.Sequential(*list(
-        #     r2plus1d_34_32_ig65m(359, pretrained=True, progress=True).children())[:-2])
-        # self.simclr_proj = nn.Sequential(
-        #     nn.Linear(self.hidden_size, self.hidden_size // 2),
-        #     nn.Linear(self.hidden_size // 2, self.simclr_embedding)
-        # )
-        self.fc_action = nn.Linear(self.hidden_size * 2, num_classes)
+        if self.backbone == 'r18':
+            self.features = nn.Sequential(*list(
+                r2plus1d_18(weights=R2Plus1D_18_Weights.KINETICS400_V1, progress=True).children())[:-2])
+        elif self.backbone == 'r34':
+            self.features = nn.Sequential(*list(
+                r2plus1d_34_32_ig65m(359, pretrained=True, progress=True).children())[:-2])
+        else:
+            raise NotImplementedError('backbone unknown')
+        self.simclr_proj = nn.Sequential(
+            nn.Linear(self.hidden_size, self.simclr_embedding)
+        )
+        self.mlp = nn.Linear(512, 512)
+        self.fc_action = nn.Linear(self.hidden_size, num_classes)
         # self.bn = nn.BatchNorm1d(self.simclr_embedding)
         # self.fc_action = nn.Linear(self.hidden_size, num_classes)
 
@@ -104,6 +109,7 @@ class dark_light_simclr(nn.Module):
             param.requires_grad = True
 
         torch.nn.init.xavier_uniform_(self.fc_action.weight)
+        torch.nn.init.xavier_uniform_(self.mlp.weight)
         self.fc_action.bias.data.zero_()
 
     def forward(self, x):
@@ -115,23 +121,25 @@ class dark_light_simclr(nn.Module):
 
         x = self.avgpool(x)  # b,512,8,1,1
         x = self.nobertpool(x)
-        x = x.view(x.size(0), self.hidden_size)  # x(b,512)
+        x = x.view(x.size(0), 512)  # x(b,512)
+        x = self.mlp(x)
 
         x_light = self.avgpool(x_light)  # b,512,8,1,1
         x_light = self.nobertpool(x_light)
-        x_light = x_light.view(x_light.size(0), self.hidden_size)  # x(b,512)
+        x_light = x_light.view(x_light.size(0), 512)  # x(
+        x_light = self.mlp(x_light)
 
-        # x_proj = self.simclr_proj(x)
+        x_proj = self.simclr_proj(x)
         # x_proj = self.bn(x_proj)
-        # x_light_proj = self.simclr_proj(x_light)
+        x_light_proj = self.simclr_proj(x_light)
         # x_light_proj = self.bn(x_light_proj)
 
-        x_cat = torch.cat((x, x_light), 1)
+        # x_cat = torch.cat((x, x_light), 1)
         # x_cat = torch.cat((x_proj, x_light_proj), 1)
         # x_proj = self.dp(x_proj)
-        logits = self.fc_action(x_cat)  # b,11
+        logits = self.fc_action(x)  # b,11
         # return logits, x_proj, x_light_proj
-        return logits, x, x_light
+        return logits, x_proj, x_light_proj
 
 
 class CosSim(nn.Module):

@@ -33,10 +33,12 @@ class Compose(object):
         self.video_transforms = video_transforms
 
     def __call__(self, clips, clips_light):
-        for t in self.video_transforms[:-1]:
+        # for t in self.video_transforms[:-1]:
+        #     clips, clips_light = t(clips, clips_light)
+        # clips = self.video_transforms[-1](clips)
+        # clips_light = self.video_transforms[-1](clips_light)
+        for t in self.video_transforms:
             clips, clips_light = t(clips, clips_light)
-        clips = self.video_transforms[-1](clips)
-        clips_light = self.video_transforms[-1](clips_light)
         return clips, clips_light
 
 
@@ -99,6 +101,32 @@ class Reset(object):
         mask = np.random.binomial(1, self.mask_prob, self.num_seg).repeat(3)
         return clips * mask
 
+
+class NormalizeBothStream(object):
+    """Given mean: (R, G, B) and std: (R, G, B),
+    will normalize each channel of the torch.*Tensor, i.e.
+    channel = (channel - mean) / std
+    Here, the input is a clip, not a single image. (multi-channel data)
+    The dimension of mean and std depends on parameter: new_length
+    If new_length = 1, it falls back to single image case (3 channel)
+    """
+
+    def __init__(self, mean, std, mean_light, std_light):
+        self.mean = mean
+        self.std = std
+        self.mean_light = mean_light
+        self.std_light = std_light
+
+    def __call__(self, tensor, tensor_light):
+        # TODO: make efficient
+        torch_mean = torch.tensor([[self.mean]]).view(-1, 1, 1).float()
+        torch_std = torch.tensor([[self.std]]).view(-1, 1, 1).float()
+        tensor2 = (tensor - torch_mean) / torch_std
+
+        torch_mean_light = torch.tensor([[self.mean_light]]).view(-1, 1, 1).float()
+        torch_std_light = torch.tensor([[self.std_light]]).view(-1, 1, 1).float()
+        tensor2_light = (tensor_light - torch_mean_light) / torch_std_light
+        return tensor2, tensor2_light
 
 class Normalize(object):
     """Given mean: (R, G, B) and std: (R, G, B),

@@ -6,7 +6,7 @@ This repository is based on the repository at https://github.com/artest08/LateTe
 This repository is authored by Jiajun Chen
 We thank the authors for the repository.
 """
-
+import logging
 import os
 import time
 import argparse
@@ -91,6 +91,7 @@ parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'hi
                     help='method of light flow')
 parser.add_argument('--loss', default='ce', type=str, help='loss [ce, arcface]')
 parser.add_argument('--tag', default='', type=str, help='tag')
+parser.add_argument('--backbone', default='r34', type=str)
 
 best_prec1 = 0
 best_loss = 30
@@ -104,7 +105,7 @@ def main():
     if not args.no_attention:
         args.arch = 'dark_light_noAttention'
 
-    suffix = f"method={args.method}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_both_flow={args.both_flow}_{args.tag}"
+    suffix = f"method={args.method}_backbone={args.backbone}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_both_flow={args.both_flow}_{args.tag}"
     headers = ['epoch', 'top1', 'top5', 'loss']
     with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
@@ -120,7 +121,7 @@ def main():
     width = 170
     height = 128
 
-    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}_split{str(args.split)}_{args.tag}"
+    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}{args.backbone}_split{str(args.split)}_{args.tag}"
     if not os.path.exists(saveLocation):
         os.makedirs(saveLocation)
     writer = SummaryWriter(saveLocation)
@@ -167,13 +168,17 @@ def main():
     # Data transforming
     is_color = True
     scale_ratios = [1.0, 0.875, 0.75, 0.66]
-    # clip_mean = [0.485, 0.456, 0.406] * args.num_seg * length
-    # clip_std = [0.229, 0.224, 0.225] * args.num_seg * length
+    clip_mean_light = [0.485, 0.456, 0.406] * args.num_seg * length
+    clip_std_light = [0.229, 0.224, 0.225] * args.num_seg * length
     clip_mean = [0.0702773, 0.06571121, 0.06437492] * args.num_seg * length
     clip_std = [0.08475896, 0.08116068, 0.07479476] * args.num_seg * length
 
-    normalize = video_transforms.Normalize(mean=clip_mean,
-                                           std=clip_std)
+    # normalize = video_transforms.Normalize(mean=clip_mean,
+    #                                        std=clip_std)
+    normalize = video_transforms.NormalizeBothStream(mean=clip_mean,
+                                                     std=clip_std,
+                                                     mean_light=clip_mean_light,
+                                                     std_light=clip_std_light)
 
     train_transform = video_transforms.Compose([
         video_transforms.MultiScaleCrop((input_size, input_size), scale_ratios),
@@ -295,8 +300,9 @@ def main():
 
 def build_model():
     # args.arch：dark_light
-    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow)
-
+    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow,
+                                       backbone=args.backbone)
+    print(f'loaded model with backbone {args.backbone}')
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
     model = model.cuda()
@@ -309,7 +315,8 @@ def build_model_validate():
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
-    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow)
+    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow,
+                                       backbone=args.backbone)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
@@ -366,10 +373,10 @@ def train(train_loader, model, criterion, optimizer, epoch):
         targets = targets.cuda()
         output = model((inputs, inputs_light))
 
-        lossClassification = criterion(output, targets)
+        lossClassification = criterion(output, targets, epoch)
         lossClassification = lossClassification / args.iter_size
 
-        if len(output) > 1:
+        if isinstance(output, tuple) and len(output) > 1:
             output = output[0]
 
         prec1, prec5 = accuracy(output.data, targets, topk=(1, 5))
@@ -430,10 +437,10 @@ def validate(val_loader, model, criterion, epoch):
             # compute output
             output = model((inputs, inputs_light))
 
-            lossClassification = criterion(output, targets)
+            lossClassification = criterion(output, targets, epoch)
 
             # measure accuracy and record loss
-            if len(output) > 1:
+            if isinstance(output, tuple) and len(output) > 1:
                 output = output[0]
             prec1, prec5 = accuracy(output.data, targets, topk=(1, 5))
 

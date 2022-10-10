@@ -7,23 +7,24 @@ class SupSimClrLoss(nn.Module):
     def __init__(self):
         super(SupSimClrLoss, self).__init__()
         self.supconloss = SupConLoss()
+        self.simclr_epoch = 80
 
-    def forward(self, outputs, labels):
+    def forward(self, outputs, labels, epoch):
         logits, x_proj, x_light_proj = outputs
+        if epoch % 2 == 0:  # >= self.simclr_epoch
+            loss_ce = F.cross_entropy(logits, labels)
+            return loss_ce
         x_proj = F.normalize(x_proj, dim=1)
         x_light_proj = F.normalize(x_light_proj, dim=1)
         x_cat = torch.stack([x_proj, x_light_proj], 1)
         loss_simclr = self.supconloss(x_cat, labels)
-
-        loss_ce = F.cross_entropy(logits, labels)
-
-        loss = 1. * loss_simclr + loss_ce
-        return loss
+        return loss_simclr
 
 
 class SupConLoss(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR"""
+
     def __init__(self, temperature=0.07, contrast_mode='all',
                  base_temperature=0.07):
         super(SupConLoss, self).__init__()
