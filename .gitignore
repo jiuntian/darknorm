@@ -1,0 +1,7 @@
+checkpoint/*
+__pycache__/*
+.idea/*
+.ipynb_checkpoints/*
+datasets/EE6222_frames/*
+__pycache__/
+datasets/EE6222_frames.zip
