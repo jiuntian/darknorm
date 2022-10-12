@@ -209,8 +209,8 @@ def main():
         video_transforms.MultiScaleCrop((input_size, input_size), scale_ratios),
         video_transforms.RandomHorizontalFlip(),
         video_transforms.ToTensor(),
-        video_transforms.TrivialAugmentWide(),
-        video_transforms.ToTensor(),
+        # video_transforms.TrivialAugmentWide(),
+        # video_transforms.ToTensor(),
         normalize,
     ])
 
