@@ -112,7 +112,7 @@ def main():
     global args, best_prec1, model, writer, best_loss, length, width, height, input_size, scheduler, suffix
     args = parser.parse_args()
 
-    seed = 0
+    seed = 0 # 3407
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
@@ -209,8 +209,8 @@ def main():
         video_transforms.MultiScaleCrop((input_size, input_size), scale_ratios),
         video_transforms.RandomHorizontalFlip(),
         video_transforms.ToTensor(),
-        # video_transforms.TrivialAugmentWide(),
-        # video_transforms.ToTensor(),
+        video_transforms.TrivialAugmentWide(),
+        video_transforms.ToTensor(),
         normalize,
     ])
 
