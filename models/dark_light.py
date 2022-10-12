@@ -96,8 +96,8 @@ class dark_light_single(nn.Module):
         else:
             raise NotImplementedError('backbone unknown')
         # self.mlp = nn.Linear(512, 512)
-        # self.fc_action = nn.Linear(4096, num_classes)
-        self.fc_action = CosSim(4096, num_classes)
+        self.fc_action = nn.Linear(4096, num_classes)
+        # self.fc_action = CosSim(4096, num_classes)
         # self.bn = nn.BatchNorm1d(self.simclr_embedding)
         # self.fc_action = nn.Linear(self.hidden_size, num_classes)
 
