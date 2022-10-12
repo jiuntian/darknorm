@@ -121,7 +121,7 @@ class SupConLoss(nn.Module):
 
 
 class ArcFaceLoss(nn.Module):
-    def __init__(self, ce=1, s=3, m=0.1, **kwargs):
+    def __init__(self, ce=1, s=3, m=0.3, **kwargs):
         super(ArcFaceLoss, self).__init__()
         self.ce = ce
         self.s = s
@@ -147,7 +147,7 @@ class ArcFaceLoss(nn.Module):
 
 
 class CosFaceLoss(nn.Module):
-    def __init__(self, ce=1, s=3, m=0.1, **kwargs):
+    def __init__(self, ce=1, s=3, m=0.3, **kwargs):
         super(CosFaceLoss, self).__init__()
         self.ce = ce
         self.s = s
