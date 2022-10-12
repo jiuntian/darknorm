@@ -11,6 +11,8 @@ import os
 import time
 import argparse
 import shutil
+import random
+
 import numpy as np
 
 # os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
@@ -100,9 +102,24 @@ best_loss = 30
 warmUpEpoch = 5
 
 
+def seed_worker(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def main():
     global args, best_prec1, model, writer, best_loss, length, width, height, input_size, scheduler, suffix
     args = parser.parse_args()
+
+    seed = 0
+    torch.manual_seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
+    g = torch.Generator()
+    g.manual_seed(seed)
+
     training_continue = args.contine
     if not args.no_attention:
         args.arch = 'dark_light_noAttention'
@@ -244,12 +261,18 @@ def main():
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
+        num_workers=args.workers, pin_memory=True,
+        worker_init_fn=seed_worker,
+        generator=g
+    )
     print(train_loader)
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=args.batch_size, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        num_workers=args.workers, pin_memory=True,
+        worker_init_fn=seed_worker,
+        generator=g
+    )
 
     if args.evaluate:
         prec1, prec5, lossClassification = validate(val_loader, model, criterion, -1)
