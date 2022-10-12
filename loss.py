@@ -3,6 +3,15 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 
+class CELoss(nn.Module):
+    def __init__(self):
+        super(CELoss, self).__init__()
+        self.ce = nn.CrossEntropyLoss()
+
+    def forward(self, outputs, labels, epoch):
+        return self.ce(outputs, labels)
+
+
 class SupSimClrLoss(nn.Module):
     def __init__(self):
         super(SupSimClrLoss, self).__init__()
@@ -11,9 +20,9 @@ class SupSimClrLoss(nn.Module):
 
     def forward(self, outputs, labels, epoch):
         logits, x_proj, x_light_proj = outputs
-        if epoch % 2 == 0:  # >= self.simclr_epoch
-            loss_ce = F.cross_entropy(logits, labels)
-            return loss_ce
+        # if epoch % 2 == 0:  # >= self.simclr_epoch
+        #     loss_ce = F.cross_entropy(logits, labels)
+        #     return loss_ce
         x_proj = F.normalize(x_proj, dim=1)
         x_light_proj = F.normalize(x_light_proj, dim=1)
         x_cat = torch.stack([x_proj, x_light_proj], 1)
@@ -118,7 +127,7 @@ class ArcFaceLoss(nn.Module):
         self.s = s
         self.m = m
 
-    def forward(self, logits, labels, onehot=False, epsilon=3.0, alpha=0.1):
+    def forward(self, logits, labels, epoch, onehot=False, epsilon=3.0, alpha=0.1):
         if onehot:
             labels = labels.argmax(1)
 
@@ -136,6 +145,24 @@ class ArcFaceLoss(nn.Module):
         loss = self.ce * loss_ce
         return loss.mean()
 
+
+class CosFaceLoss(nn.Module):
+    def __init__(self, ce=1, s=3, m=0.1, **kwargs):
+        super(CosFaceLoss, self).__init__()
+        self.ce = ce
+        self.s = s
+        self.m = m
+
+    def forward(self, logits, labels, epoch, onehot=False):
+        if onehot:
+            labels = labels.argmax(1)
+
+        y_onehot = torch.zeros_like(logits)
+        y_onehot.scatter_(1, torch.unsqueeze(labels, dim=-1), self.m)
+        margin_logits = self.s * (logits - y_onehot)
+
+        loss_ce = F.cross_entropy(margin_logits, labels)
+        return loss_ce
 
 class CosineLoss(nn.Module):
     def __init__(self):

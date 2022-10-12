@@ -29,7 +29,7 @@ from torch.optim import lr_scheduler
 import video_transforms
 import models
 import datasets
-from loss import ArcFaceLoss, CosineLoss, SupSimClrLoss
+from loss import ArcFaceLoss, CosineLoss, SupSimClrLoss, CELoss, CosFaceLoss
 # import swats
 from opt.AdamW import AdamW
 
@@ -74,6 +74,8 @@ parser.add_argument('--print-freq', default=40, type=int,
                     metavar='N', help='print frequency (default: 400)')
 parser.add_argument('--save-freq', default=1, type=int,
                     metavar='N', help='save frequency (default: 1)')
+parser.add_argument('--eval-freq', default=1, type=int,
+                    metavar='N', help='eval frequency (default: 1)')
 parser.add_argument('--num-seg', default=1, type=int,
                     metavar='N', help='Number of segments in dataloader (default: 1)')
 # parser.add_argument('--resume', default='./dene4', type=str, metavar='PATH',
@@ -148,8 +150,10 @@ def main():
     # define loss function (criterion) and optimizer
     if args.loss == "arcface":
         criterion = ArcFaceLoss().cuda()
+    elif args.loss == 'cosface':
+        criterion = CosFaceLoss().cuda()
     elif args.loss == 'ce':
-        criterion = nn.CrossEntropyLoss().cuda()
+        criterion = CELoss().cuda()
     elif args.loss == 'cosine':
         criterion = CosineLoss().cuda()
     elif args.loss == 'simclr':
@@ -175,6 +179,10 @@ def main():
 
     # normalize = video_transforms.Normalize(mean=clip_mean,
     #                                        std=clip_std)
+    # normalize = video_transforms.NormalizeBothStream(mean=clip_mean_light,
+    #                                                  std=clip_std_light,
+    #                                                  mean_light=clip_mean_light,
+    #                                                  std_light=clip_std_light)
     normalize = video_transforms.NormalizeBothStream(mean=clip_mean,
                                                      std=clip_std,
                                                      mean_light=clip_mean_light,
@@ -265,6 +273,8 @@ def main():
         # remember best prec@1 and save checkpoint
 
         is_best = prec1 >= best_prec1
+        # is_best = lossClassification <= best_loss
+        best_loss = min(lossClassification, best_loss)
         best_prec1 = max(prec1, best_prec1)
         #        best_in_existing_learning_rate = max(prec1, best_in_existing_learning_rate)
         #
@@ -273,7 +283,7 @@ def main():
         #            best_in_existing_learning_rate = 0
 
         if (epoch + 1) % args.save_freq == 0:
-            checkpoint_name = "%03d_%s" % (epoch + 1, "checkpoint.pth.tar")
+            checkpoint_name = "checkpoint.pth.tar"
             if is_best:
                 print("Saved Best Model")
                 save_checkpoint({
@@ -363,15 +373,26 @@ def train(train_loader, model, criterion, optimizer, epoch):
     acc_mini_batch = 0.0
     acc_mini_batch_top3 = 0.0
     totalSamplePerIter = 0
-    for i, (inputs, inputs_light, targets) in enumerate(train_loader):
-        inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
-        inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+    for i, input in enumerate(train_loader):
+        if args.both_flow == 'True':
+            (inputs, inputs_light, targets) = input
+            inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+            inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
 
-        inputs = inputs.cuda()
-        inputs_light = inputs_light.cuda()
+            inputs = inputs.cuda()
+            inputs_light = inputs_light.cuda()
+            output = model((inputs, inputs_light))
+        elif args.both_flow == 'False':
+            (inputs, _,  targets) = input  # dark
+            # (_, inputs, targets) = input  # light
+            inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+            inputs = inputs.cuda()
+            output = model(inputs)
+        else:
+            raise NotImplementedError(f'Invalid both_flow: {args.both_flow}')
+
 
         targets = targets.cuda()
-        output = model((inputs, inputs_light))
 
         lossClassification = criterion(output, targets, epoch)
         lossClassification = lossClassification / args.iter_size
@@ -426,16 +447,25 @@ def validate(val_loader, model, criterion, epoch):
 
     end = time.time()
     with torch.no_grad():
-        for i, (inputs, inputs_light, targets) in enumerate(val_loader):
-            inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
-            inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+        for i, input in enumerate(val_loader):
+            if args.both_flow == 'True':
+                (inputs, inputs_light, targets) = input
+                inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+                inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
 
-            inputs = inputs.cuda()
-            inputs_light = inputs_light.cuda()
+                inputs = inputs.cuda()
+                inputs_light = inputs_light.cuda()
+                output = model((inputs, inputs_light))
+            elif args.both_flow == 'False':
+                (inputs, _,  targets) = input  # dark
+                # (_, inputs, targets) = input  # light
+                inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+                inputs = inputs.cuda()
+                output = model(inputs)
+            else:
+                raise NotImplementedError(f'Invalid both_flow: {args.both_flow}')
+
             targets = targets.cuda()
-
-            # compute output
-            output = model((inputs, inputs_light))
 
             lossClassification = criterion(output, targets, epoch)
 
