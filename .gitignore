@@ -1,7 +1,10 @@
 checkpoint/*
 __pycache__/*
 .idea/*
-.ipynb_checkpoints/*
+.ipynb_checkpoints/
 datasets/EE6222_frames/*
 __pycache__/
 datasets/EE6222_frames.zip
+train_*.csv
+validate_*.csv
+ori_*.csv
