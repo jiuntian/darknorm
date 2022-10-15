@@ -37,41 +37,8 @@ def make_dataset(root, source):
     return clips  # (视频名称,帧长,标签)
 
 
-def ReadSegmentRGB(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration):
-    if is_color:
-        cv_read_flag = cv2.IMREAD_COLOR  # > 0
-    else:
-        cv_read_flag = cv2.IMREAD_GRAYSCALE  # = 0
-    interpolation = cv2.INTER_LINEAR
-
-    sampled_list = []
-    for offset_id in range(len(offsets)):
-        offset = offsets[offset_id]
-        for length_id in range(1, new_length + 1):
-            loaded_frame_index = length_id + offset
-            moded_loaded_frame_index = loaded_frame_index % (duration + 1)
-            if moded_loaded_frame_index == 0:
-                moded_loaded_frame_index = (duration + 1)
-            frame_name = name_pattern % (moded_loaded_frame_index)
-            frame_path = path + "/" + frame_name
-            cv_img_origin = cv2.imread(frame_path, cv_read_flag)
-            if cv_img_origin is None:
-                print("Could not load file %s" % (frame_path))
-                sys.exit()
-                # TODO: error handling here
-            if new_width > 0 and new_height > 0:
-                # use OpenCV3, use OpenCV2.4.13 may have error
-                cv_img = cv2.resize(cv_img_origin, (new_width, new_height), interpolation)
-            else:
-                cv_img = cv_img_origin
-            cv_img = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
-            sampled_list.append(cv_img)
-    clip_input = np.concatenate(sampled_list, axis=2)
-    return clip_input
-
-
-def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration, gamma,
-                         method):
+def read_segment_rgb_light(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration, gamma,
+                           method):
     if is_color:
         cv_read_flag = cv2.IMREAD_COLOR  # > 0
     else:
@@ -97,6 +64,8 @@ def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_co
             elif method == 'gamma_histogram':
                 cv_img_origin = img_transforms.gamma_intensity_correction(cv_img_origin, gamma)
                 cv_img_origin = img_transforms.histogram_normalization(cv_img_origin)
+            elif method == 'none':
+                cv_img_origin = cv_img_origin
             else:
                 raise NotImplementedError(f'method {method} not defined')
             #####
@@ -139,7 +108,6 @@ class EE6222(data.Dataset):
         classes, class_to_idx = find_classes(root)
         clips = make_dataset(root, source)
         self.gamma = gamma
-        # clips:(视频名称, 帧长, 标签)
 
         if len(clips) == 0:
             raise (RuntimeError("Found 0 video clips in subfolders of: " + root + "\n"
@@ -210,27 +178,29 @@ class EE6222(data.Dataset):
                 print("Only phase train and val are supported.")
 
         if self.light:
-            clip_input = ReadSegmentRGB_light(path,
-                                              offsets,
-                                              self.new_height,
-                                              self.new_width,
-                                              self.new_length,
-                                              self.is_color,
-                                              self.name_pattern,
-                                              duration,
-                                              gamma=self.gamma,
-                                              method=self.method
-                                              )
+            clip_input = read_segment_rgb_light(path,
+                                                offsets,
+                                                self.new_height,
+                                                self.new_width,
+                                                self.new_length,
+                                                self.is_color,
+                                                self.name_pattern,
+                                                duration,
+                                                gamma=self.gamma,
+                                                method=self.method
+                                                )
         else:
-            clip_input = ReadSegmentRGB(path,
-                                        offsets,
-                                        self.new_height,
-                                        self.new_width,
-                                        self.new_length,
-                                        self.is_color,
-                                        self.name_pattern,
-                                        duration
-                                        )
+            clip_input = read_segment_rgb_light(path,
+                                                offsets,
+                                                self.new_height,
+                                                self.new_width,
+                                                self.new_length,
+                                                self.is_color,
+                                                self.name_pattern,
+                                                duration,
+                                                gamma=self.gamma,
+                                                method='none'
+                                                )
 
         if self.transform is not None:
             clip_input = self.transform(clip_input)
