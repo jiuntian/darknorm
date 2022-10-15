@@ -84,8 +84,9 @@ class dark_light_single(nn.Module):
         self.both_flow = both_flow
         self.backbone = backbone
 
-        self.avgpool = nn.AvgPool3d((1, 7, 7), stride=1)
-        self.nobertpool = nn.AdaptiveAvgPool3d(1)
+        # self.avgpool = nn.AvgPool3d((1, 7, 7), stride=1)
+        self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
+        # self.nobertpool = nn.AdaptiveAvgPool3d(1)
         # load pretrained model
         if self.backbone == 'r18':
             self.features = nn.Sequential(*list(
@@ -95,8 +96,7 @@ class dark_light_single(nn.Module):
                 r2plus1d_34_32_ig65m(359, pretrained=True, progress=True).children())[:-2])
         else:
             raise NotImplementedError('backbone unknown')
-        # self.mlp = nn.Linear(512, 512)
-        self.fc_action = nn.Linear(4096, num_classes)
+        self.fc_action = nn.Linear(512, num_classes)
         # self.fc_action = CosSim(4096, num_classes)
         # self.bn = nn.BatchNorm1d(self.simclr_embedding)
         # self.fc_action = nn.Linear(self.hidden_size, num_classes)
@@ -105,8 +105,8 @@ class dark_light_single(nn.Module):
 
         for param in self.features.parameters():
             param.requires_grad = True
-
-        torch.nn.init.xavier_uniform_(self.fc_action.weight)
+        nn.init.normal_(self.fc_action.weight, 0, 0.01)
+        # torch.nn.init.xavier_uniform_(self.fc_action.weight)
         # torch.nn.init.xavier_uniform_(self.mlp.weight)
         if not isinstance(self.fc_action, CosSim):
             self.fc_action.bias.data.zero_()
@@ -119,7 +119,8 @@ class dark_light_single(nn.Module):
 
         x = self.avgpool(x)  # b,512,8,1,1
         # x = self.nobertpool(x)
-        x = x.view(x.size(0), 4096)  # x(b,512)
+        # x = x.view(x.size(0), 4096)  # x(b,4096)
+        x = x.flatten(1)
 
         # x_proj = self.simclr_proj(x)
         # x_proj = self.bn(x_proj)

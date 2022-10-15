@@ -128,6 +128,32 @@ class NormalizeBothStream(object):
         tensor2_light = (tensor_light - torch_mean_light) / torch_std_light
         return tensor2, tensor2_light
 
+class DeNormalizeBothStream(object):
+    """Given mean: (R, G, B) and std: (R, G, B),
+    will normalize each channel of the torch.*Tensor, i.e.
+    channel = (channel - mean) / std
+    Here, the input is a clip, not a single image. (multi-channel data)
+    The dimension of mean and std depends on parameter: new_length
+    If new_length = 1, it falls back to single image case (3 channel)
+    """
+
+    def __init__(self, mean, std, mean_light, std_light):
+        self.mean = mean
+        self.std = std
+        self.mean_light = mean_light
+        self.std_light = std_light
+
+    def __call__(self, tensor, tensor_light):
+        # TODO: make efficient
+        torch_mean = torch.tensor([[self.mean]]).view(-1, 1, 1).float()
+        torch_std = torch.tensor([[self.std]]).view(-1, 1, 1).float()
+        tensor2 = (tensor * torch_std) + torch_mean
+        
+        torch_mean_light = torch.tensor([[self.mean_light]]).view(-1, 1, 1).float()
+        torch_std_light = torch.tensor([[self.std_light]]).view(-1, 1, 1).float()
+        tensor2_light = (tensor_light * torch_std_light) + torch_mean_light
+        return tensor2, tensor2_light
+
 class Normalize(object):
     """Given mean: (R, G, B) and std: (R, G, B),
     will normalize each channel of the torch.*Tensor, i.e.
@@ -282,11 +308,13 @@ class TrivialAugmentWide(torch.nn.Module):
             num_magnitude_bins: int = 31,
             interpolation: InterpolationMode = InterpolationMode.NEAREST,
             fill: Optional[List[float]] = None,
+            max_value:int = 255
     ) -> None:
         super().__init__()
         self.num_magnitude_bins = num_magnitude_bins
         self.interpolation = interpolation
         self.fill = fill
+        self.max_value = max_value
 
     def _augmentation_space(self, num_bins: int) -> Dict[str, Tuple[Tensor, bool]]:
         return {
@@ -348,12 +376,11 @@ class TrivialAugmentWide(torch.nn.Module):
             scaled_clips = torch.zeros((c, h, w))
             scaled_clips_light = torch.zeros((c, h, w))
             for frame_id in range(num_imgs):
-                # print(img_light[frame_id * 3:frame_id * 3 + 3, :, :])
                 scaled_clips[frame_id * 3:frame_id * 3 + 3, :, :] \
-                    = _apply_op(img[frame_id * 3:frame_id * 3 + 3, :, :] * 255, op_name, magnitude,
+                    = _apply_op(img[frame_id * 3:frame_id * 3 + 3, :, :] * self.max_value, op_name, magnitude,
                                 interpolation=self.interpolation, fill=fill)
                 scaled_clips_light[frame_id * 3:frame_id * 3 + 3, :, :] \
-                    = _apply_op(img_light[frame_id * 3:frame_id * 3 + 3, :, :] * 255, op_name, magnitude,
+                    = _apply_op(img_light[frame_id * 3:frame_id * 3 + 3, :, :] * self.max_value, op_name, magnitude,
                                 interpolation=self.interpolation, fill=fill)
             return scaled_clips, scaled_clips_light
         else:

@@ -15,9 +15,6 @@ import random
 
 import numpy as np
 
-# os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"]="0"
-
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -43,11 +40,13 @@ model_names = sorted(name for name in models.__dict__
 
 dataset_names = sorted(name for name in datasets.__all__)
 
-parser = argparse.ArgumentParser(description='PyTorch Two-Stream Action Recognition')
+parser = argparse.ArgumentParser(
+    description='PyTorch Two-Stream Action Recognition')
 parser.add_argument('--settings', metavar='DIR', default='./datasets/settings',
                     help='path to datset setting files')
 parser.add_argument('--dataset', '-d', default='ARID',
-                    choices=["ucf101", "hmdb51", "smtV2", "window", "ARID", "EE6222"],
+                    choices=["ucf101", "hmdb51", "smtV2",
+                             "window", "ARID", "EE6222"],
                     help='dataset: ucf101 | hmdb51 | smtV2 | EE6222')
 
 parser.add_argument('--arch', '-a', default='dark_light',
@@ -64,7 +63,7 @@ parser.add_argument('--epochs', default=200, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('-b', '--batch-size', default=3, type=int,
                     metavar='N', help='mini-batch size (default: 8)')
-parser.add_argument('--iter-size', default=16, type=int,
+parser.add_argument('--iter-size', default=8, type=int,
                     metavar='I', help='iter size to reduce memory usage (default: 16)')
 parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float,
                     metavar='LR', help='initial learning rate')
@@ -90,12 +89,21 @@ parser.add_argument('-g', '--gamma', default=1, type=float,
                     help="the value of gamma")
 parser.add_argument('--both-flow', default='True',
                     help='give dark and light flow both')
-parser.add_argument('--no-attention', default=True, action='store_false', help="use attention to instead of linear")
+parser.add_argument('--no-attention', default=True,
+                    action='store_false', help="use attention to instead of linear")
 parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'histogram', 'gamma_histogram'],
                     help='method of light flow')
-parser.add_argument('--loss', default='ce', type=str, help='loss [ce, arcface]')
+parser.add_argument('--loss', default='ce', type=str,
+                    help='loss [ce, arcface]')
 parser.add_argument('--tag', default='', type=str, help='tag')
 parser.add_argument('--backbone', default='r34', type=str)
+parser.add_argument('--uncorrect-norm', action='store_true',
+                    default=False, help='uncorrect norm')
+parser.add_argument('--no-trivial', action='store_true',
+                    default=False, help='disable TrivialWideAugment')
+parser.add_argument('--normalize-first', action='store_true',
+                    default=False, help='normalize first before trivial')
+parser.add_argument('--light', default=False, action='store_true', help='use light stream')
 
 best_prec1 = 0
 best_loss = 30
@@ -112,13 +120,16 @@ def main():
     global args, best_prec1, model, writer, best_loss, length, width, height, input_size, scheduler, suffix
     args = parser.parse_args()
 
-    seed = 0 # 3407
+    seed = 0  # 3407
     torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
 
     g = torch.Generator()
     g.manual_seed(seed)
+
+    assert args.light == (args.both_flow=='False'), 'must use single flow to enable --light'
 
     training_continue = args.contine
     if not args.no_attention:
@@ -150,16 +161,19 @@ def main():
     if args.evaluate:
         print("Building validation model ... ")
         model = build_model_validate()
-        optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = AdamW(model.parameters(), lr=args.lr,
+                          weight_decay=args.weight_decay)
     elif training_continue:
         model, startEpoch, optimizer, best_prec1 = build_model_continue()
         for param_group in optimizer.param_groups:
             lr = param_group['lr']
-        print("Continuing with best precision: %.3f and start epoch %d and lr: %f" % (best_prec1, startEpoch, lr))
+        print("Continuing with best precision: %.3f and start epoch %d and lr: %f" % (
+            best_prec1, startEpoch, lr))
     else:
         print("Building model with ADAMW... ")
         model = build_model()
-        optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = AdamW(model.parameters(), lr=args.lr,
+                          weight_decay=args.weight_decay)
         startEpoch = 0
 
     print("Model %s is loaded. " % (args.arch))
@@ -196,23 +210,41 @@ def main():
 
     # normalize = video_transforms.Normalize(mean=clip_mean,
     #                                        std=clip_std)
-    # normalize = video_transforms.NormalizeBothStream(mean=clip_mean_light,
-    #                                                  std=clip_std_light,
-    #                                                  mean_light=clip_mean_light,
-    #                                                  std_light=clip_std_light)
-    normalize = video_transforms.NormalizeBothStream(mean=clip_mean,
-                                                     std=clip_std,
-                                                     mean_light=clip_mean_light,
-                                                     std_light=clip_std_light)
+    if args.uncorrect_norm:
+        print('Using uncorrected norm')
+        normalize = video_transforms.NormalizeBothStream(mean=clip_mean_light,
+                                                         std=clip_std_light,
+                                                         mean_light=clip_mean_light,
+                                                         std_light=clip_std_light)
+    else:
+        print('Using corrected norm')
+        normalize = video_transforms.NormalizeBothStream(mean=clip_mean,
+                                                         std=clip_std,
+                                                         mean_light=clip_mean_light,
+                                                         std_light=clip_std_light)
 
-    train_transform = video_transforms.Compose([
-        video_transforms.MultiScaleCrop((input_size, input_size), scale_ratios),
+    train_transforms = [
+        video_transforms.MultiScaleCrop(
+            (input_size, input_size), scale_ratios),
         video_transforms.RandomHorizontalFlip(),
-        video_transforms.ToTensor(),
-        video_transforms.TrivialAugmentWide(),
-        video_transforms.ToTensor(),
-        normalize,
-    ])
+        video_transforms.ToTensor(),  # from [0-225] to [0-1]
+    ]
+
+    if not args.no_trivial:
+        print('using trivial')
+        train_transforms.extend([
+            video_transforms.TrivialAugmentWide(),  # required input [0-1]
+            video_transforms.ToTensor(),
+        ])
+    else:
+        print('not using trivial')
+
+    train_transforms.append(normalize)
+
+    print("Train transforms: ")
+    print(train_transforms)
+
+    train_transform = video_transforms.Compose(train_transforms)
 
     val_transform = video_transforms.Compose([
         video_transforms.CenterCrop((input_size)),
@@ -222,11 +254,14 @@ def main():
 
     # data loading
     train_setting_file = "train_split%d.txt" % (args.split)
-    train_split_file = os.path.join(args.settings, args.dataset, train_setting_file)
+    train_split_file = os.path.join(
+        args.settings, args.dataset, train_setting_file)
     val_setting_file = "val_split%d.txt" % (args.split)
-    val_split_file = os.path.join(args.settings, args.dataset, val_setting_file)
+    val_split_file = os.path.join(
+        args.settings, args.dataset, val_setting_file)
     if not os.path.exists(train_split_file) or not os.path.exists(val_split_file):
-        print("No split file exists in %s directory. Preprocess the dataset first" % (args.settings))
+        print("No split file exists in %s directory. Preprocess the dataset first" % (
+            args.settings))
     # ARID.py
     train_dataset = datasets.__dict__[args.dataset](root=dataset,
                                                     modality="rgb",
@@ -275,23 +310,26 @@ def main():
     )
 
     if args.evaluate:
-        prec1, prec5, lossClassification = validate(val_loader, model, criterion, -1)
+        prec1, prec5, lossClassification = validate(
+            val_loader, model, criterion, -1)
         return
 
     for epoch in range(startEpoch, args.epochs):
-        #        if learning_rate_index > max_learning_rate_decay_count:
-        #            break
-        #        adjust_learning_rate(optimizer, epoch)
+        if optimizer.param_groups[0]['lr'] <= 1e-7:
+            print('Cannot further reduce lr, early stopping')
+            break
         train(train_loader, model, criterion, optimizer, epoch)
 
         # evaluate on validation set
         prec1 = 0.0
         lossClassification = 0
         if (epoch + 1) % args.save_freq == 0:
-            prec1, prec5, lossClassification = validate(val_loader, model, criterion, epoch)
+            prec1, prec5, lossClassification = validate(
+                val_loader, model, criterion, epoch)
             writer.add_scalar('data/top1_validation', prec1, epoch)
             writer.add_scalar('data/top3_validation', prec5, epoch)
-            writer.add_scalar('data/classification_loss_validation', lossClassification, epoch)
+            writer.add_scalar(
+                'data/classification_loss_validation', lossClassification, epoch)
             scheduler.step(lossClassification)
         # remember best prec@1 and save checkpoint
 
@@ -344,7 +382,8 @@ def build_model():
 
 
 def build_model_validate():
-    modelLocation = "./checkpoint/" + args.dataset + "_" + args.arch + "_split" + str(args.split)
+    modelLocation = "./checkpoint/" + args.dataset + \
+        "_" + args.arch + "_split" + str(args.split)
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
@@ -361,18 +400,21 @@ def build_model_validate():
 
 
 def build_model_continue():
-    modelLocation = "./checkpoint/" + args.dataset + "_" + args.arch + "_split" + str(args.split)
+    modelLocation = "./checkpoint/" + args.dataset + \
+        "_" + args.arch + "_split" + str(args.split)
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
-    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow)
+    model = models.__dict__[args.arch](
+        num_classes=10, length=args.num_seg, both_flow=args.both_flow)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
 
     model.load_state_dict(params['state_dict'])
     model = model.cuda()
-    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = AdamW(model.parameters(), lr=args.lr,
+                      weight_decay=args.weight_decay)
     optimizer.load_state_dict(params['optimizer'])
 
     startEpoch = params['epoch']
@@ -399,21 +441,25 @@ def train(train_loader, model, criterion, optimizer, epoch):
     for i, input in enumerate(train_loader):
         if args.both_flow == 'True':
             (inputs, inputs_light, targets) = input
-            inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
-            inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+            inputs = inputs.view(-1, length, 3, input_size,
+                                 input_size).transpose(1, 2)
+            inputs_light = inputs_light.view(-1, length,
+                                             3, input_size, input_size).transpose(1, 2)
 
             inputs = inputs.cuda()
             inputs_light = inputs_light.cuda()
             output = model((inputs, inputs_light))
         elif args.both_flow == 'False':
-            (inputs, _,  targets) = input  # dark
-            # (_, inputs, targets) = input  # light
-            inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+            if args.light:
+                (_, inputs, targets) = input  # light
+            else:
+                (inputs, _,  targets) = input  # dark
+            inputs = inputs.view(-1, length, 3, input_size,
+                                 input_size).transpose(1, 2)
             inputs = inputs.cuda()
             output = model(inputs)
         else:
             raise NotImplementedError(f'Invalid both_flow: {args.both_flow}')
-
 
         targets = targets.cuda()
 
@@ -435,9 +481,11 @@ def train(train_loader, model, criterion, optimizer, epoch):
             # compute gradient and do SGD step
             optimizer.step()
             optimizer.zero_grad()
-            lossesClassification.update(loss_mini_batch_classification, totalSamplePerIter)
+            lossesClassification.update(
+                loss_mini_batch_classification, totalSamplePerIter)
             top1.update(acc_mini_batch / args.iter_size, totalSamplePerIter)
-            top5.update(acc_mini_batch_top3 / args.iter_size, totalSamplePerIter)
+            top5.update(acc_mini_batch_top3 /
+                        args.iter_size, totalSamplePerIter)
             batch_time.update(time.time() - end)
             end = time.time()
             loss_mini_batch_classification = 0
@@ -447,15 +495,18 @@ def train(train_loader, model, criterion, optimizer, epoch):
             # scheduler.step()
 
         if (i + 1) % args.print_freq == 0:
-            print('[%d] time: %.3f loss: %.4f' % (i, batch_time.avg, lossesClassification.avg))
+            print('[%d] time: %.3f loss: %.4f' %
+                  (i, batch_time.avg, lossesClassification.avg))
 
     print(
         'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Classification Loss {lossClassification.avg:.4f}'
         .format(epoch=epoch, top1=top1, top5=top5, lossClassification=lossesClassification))
     with open('train_record_%s.csv' % suffix, 'a', newline='') as f:
         record = csv.writer(f)
-        record.writerow([epoch, round(top1.avg, 3), round(top5.avg, 3), round(lossesClassification.avg, 4)])
-    writer.add_scalar('data/classification_loss_training', lossesClassification.avg, epoch)
+        record.writerow([epoch, round(top1.avg, 3), round(
+            top5.avg, 3), round(lossesClassification.avg, 4)])
+    writer.add_scalar('data/classification_loss_training',
+                      lossesClassification.avg, epoch)
     writer.add_scalar('data/top1_training', top1.avg, epoch)
     writer.add_scalar('data/top3_training', top5.avg, epoch)
 
@@ -473,20 +524,25 @@ def validate(val_loader, model, criterion, epoch):
         for i, input in enumerate(val_loader):
             if args.both_flow == 'True':
                 (inputs, inputs_light, targets) = input
-                inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
-                inputs_light = inputs_light.view(-1, length, 3, input_size, input_size).transpose(1, 2)
-
+                inputs = inputs.view(-1, length, 3, input_size,
+                                     input_size).transpose(1, 2)
+                inputs_light = inputs_light.view(-1, length,
+                                                 3, input_size, input_size).transpose(1, 2)
                 inputs = inputs.cuda()
                 inputs_light = inputs_light.cuda()
                 output = model((inputs, inputs_light))
             elif args.both_flow == 'False':
-                (inputs, _,  targets) = input  # dark
-                # (_, inputs, targets) = input  # light
-                inputs = inputs.view(-1, length, 3, input_size, input_size).transpose(1, 2)
+                if args.light:
+                    (_, inputs, targets) = input  # light
+                else:
+                    (inputs, _,  targets) = input  # dark
+                inputs = inputs.view(-1, length, 3, input_size,
+                                     input_size).transpose(1, 2)
                 inputs = inputs.cuda()
                 output = model(inputs)
             else:
-                raise NotImplementedError(f'Invalid both_flow: {args.both_flow}')
+                raise NotImplementedError(
+                    f'Invalid both_flow: {args.both_flow}')
 
             targets = targets.cuda()
 
@@ -497,7 +553,8 @@ def validate(val_loader, model, criterion, epoch):
                 output = output[0]
             prec1, prec5 = accuracy(output.data, targets, topk=(1, 5))
 
-            lossesClassification.update(lossClassification.data.item(), output.size(0))
+            lossesClassification.update(
+                lossClassification.data.item(), output.size(0))
 
             top1.update(prec1.item(), output.size(0))
             top5.update(prec5.item(), output.size(0))
@@ -511,7 +568,8 @@ def validate(val_loader, model, criterion, epoch):
             .format(top1=top1, top5=top5, lossClassification=lossesClassification))
         with open('validate_record_%s.csv' % suffix, 'a', newline='') as f:
             record = csv.writer(f)
-            record.writerow([epoch, round(top1.avg, 3), round(top5.avg, 3), round(lossesClassification.avg, 4)])
+            record.writerow([epoch, round(top1.avg, 3), round(
+                top5.avg, 3), round(lossesClassification.avg, 4)])
     return top1.avg, top5.avg, lossesClassification.avg
 
 
