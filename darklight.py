@@ -82,8 +82,6 @@ parser.add_argument('-c', '--continue', dest='contine', action='store_true',
                     help='continue training')
 parser.add_argument('-g', '--gamma', default=1, type=float,
                     help="the value of gamma")
-parser.add_argument('--both-flow', default='True',
-                    help='give dark and light flow both')
 parser.add_argument('--no-attention', default=True,
                     action='store_false', help="use attention to instead of linear")
 parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'histogram', 'gamma_histogram'],
@@ -124,13 +122,11 @@ def main():
     g = torch.Generator()
     g.manual_seed(seed)
 
-    assert args.light == (args.both_flow == 'False'), 'must use single flow to enable --light'
-
     training_continue = args.contine
     if not args.no_attention:
         args.arch = 'dark_light_noAttention'
 
-    suffix = f"method={args.method}_backbone={args.backbone}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_both_flow={args.both_flow}_{args.tag}"
+    suffix = f"method={args.method}_backbone={args.backbone}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_{args.tag}"
     headers = ['epoch', 'top1', 'top2', 'loss']
     with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
@@ -353,8 +349,7 @@ def main():
 
 def build_model():
     # args.arch：dark_light
-    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow,
-                                       backbone=args.backbone)
+    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, backbone=args.backbone)
     print(f'loaded model with backbone {args.backbone}')
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
@@ -369,8 +364,7 @@ def build_model_validate():
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
     print(modelLocation)
-    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, both_flow=args.both_flow,
-                                       backbone=args.backbone)
+    model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, backbone=args.backbone)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
@@ -388,7 +382,7 @@ def build_model_continue():
     params = torch.load(model_path)
     print(modelLocation)
     model = models.__dict__[args.arch](
-        num_classes=10, length=args.num_seg, both_flow=args.both_flow)
+        num_classes=10, length=args.num_seg)
 
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
@@ -421,27 +415,14 @@ def train(train_loader, model, criterion, optimizer, epoch):
     acc_mini_batch_top2 = 0.0
     totalSamplePerIter = 0
     for i, input in enumerate(train_loader):
-        if args.both_flow == 'True':
-            (inputs, inputs_light, targets) = input
-            inputs = inputs.view(-1, length, 3, input_size,
-                                 input_size).transpose(1, 2)
-            inputs_light = inputs_light.view(-1, length,
-                                             3, input_size, input_size).transpose(1, 2)
-
-            inputs = inputs.cuda()
-            inputs_light = inputs_light.cuda()
-            output = model((inputs, inputs_light))
-        elif args.both_flow == 'False':
-            if args.light:
-                (_, inputs, targets) = input  # light
-            else:
-                (inputs, _, targets) = input  # dark
-            inputs = inputs.view(-1, length, 3, input_size,
-                                 input_size).transpose(1, 2)
-            inputs = inputs.cuda()
-            output = model(inputs)
+        if args.light:
+            (_, inputs, targets) = input  # light
         else:
-            raise NotImplementedError(f'Invalid both_flow: {args.both_flow}')
+            (inputs, _, targets) = input  # dark
+        inputs = inputs.view(-1, length, 3, input_size,
+                             input_size).transpose(1, 2)
+        inputs = inputs.cuda()
+        output = model(inputs)
 
         targets = targets.cuda()
 
@@ -480,7 +461,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
                   (i, batch_time.avg, lossesClassification.avg))
 
     print(f'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}' 
-          'Classification Loss {lossesClassification.avg:.4f}')
+          f'Classification Loss {lossesClassification.avg:.4f}')
     with open('train_record_%s.csv' % suffix, 'a', newline='') as f:
         record = csv.writer(f)
         record.writerow([epoch, round(top1.avg, 3), round(
@@ -502,27 +483,14 @@ def validate(val_loader, model, criterion, epoch):
     end = time.time()
     with torch.no_grad():
         for i, input in enumerate(val_loader):
-            if args.both_flow == 'True':
-                (inputs, inputs_light, targets) = input
-                inputs = inputs.view(-1, length, 3, input_size,
-                                     input_size).transpose(1, 2)
-                inputs_light = inputs_light.view(-1, length,
-                                                 3, input_size, input_size).transpose(1, 2)
-                inputs = inputs.cuda()
-                inputs_light = inputs_light.cuda()
-                output = model((inputs, inputs_light))
-            elif args.both_flow == 'False':
-                if args.light:
-                    (_, inputs, targets) = input  # light
-                else:
-                    (inputs, _, targets) = input  # dark
-                inputs = inputs.view(-1, length, 3, input_size,
-                                     input_size).transpose(1, 2)
-                inputs = inputs.cuda()
-                output = model(inputs)
+            if args.light:
+                (_, inputs, targets) = input  # light
             else:
-                raise NotImplementedError(
-                    f'Invalid both_flow: {args.both_flow}')
+                (inputs, _, targets) = input  # dark
+            inputs = inputs.view(-1, length, 3, input_size,
+                                 input_size).transpose(1, 2)
+            inputs = inputs.cuda()
+            output = model(inputs)
 
             targets = targets.cuda()
 
@@ -543,9 +511,8 @@ def validate(val_loader, model, criterion, epoch):
             batch_time.update(time.time() - end)
             end = time.time()
 
-        print(
-            'validate * * Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f} Classification Loss {lossClassification.avg:.4f}\n'
-            .format(top1=top1, top2=top2, lossClassification=lossesClassification))
+        print(f'validate * * Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}'
+              f'Classification Loss {lossesClassification.avg:.4f}\n')
         with open('validate_record_%s.csv' % suffix, 'a', newline='') as f:
             record = csv.writer(f)
             record.writerow([epoch, round(top1.avg, 3), round(
