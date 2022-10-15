@@ -4,12 +4,12 @@ from torchvision.models.video import r2plus1d_18, R2Plus1D_18_Weights
 
 from .r2plus1d import r2plus1d_34_32_ig65m
 
-__all__ = ['dark_light_single']
+__all__ = ['DarkNorm']
 
 
-class dark_light_single(nn.Module):
+class DarkNorm(nn.Module):
     def __init__(self, num_classes, length, backbone='r18'):
-        super(dark_light_single, self).__init__()
+        super(DarkNorm, self).__init__()
         self.hidden_size = 512
         self.n_layers = 1
         self.attn_heads = 8

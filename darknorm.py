@@ -41,8 +41,8 @@ dataset_names = sorted(name for name in datasets.__all__)
 
 parser = argparse.ArgumentParser(description='PyTorch DarkNorm Action Recognition')
 parser.add_argument('--settings', metavar='DIR', default='./datasets/settings',
-                    help='path to datset setting files')
-parser.add_argument('--dataset', '-d', default='ARID',
+                    help='path to dataset setting files')
+parser.add_argument('--dataset', '-d', default='EE6222',
                     choices=["EE6222"],
                     help='dataset: EE6222')
 parser.add_argument('--arch', '-a', default='dark_light',
@@ -60,7 +60,7 @@ parser.add_argument('-b', '--batch-size', default=3, type=int,
                     metavar='N', help='mini-batch size (default: 8)')
 parser.add_argument('--iter-size', default=8, type=int,
                     metavar='I', help='iter size to reduce memory usage (default: 16)')
-parser.add_argument('--lr', '--learning-rate', default=1e-5, type=float,
+parser.add_argument('--lr', '--learning-rate', default=1e-4, type=float,
                     metavar='LR', help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum (default: 0.9)')
@@ -78,18 +78,16 @@ parser.add_argument('--num-seg', default=1, type=int,
 #                    help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
-parser.add_argument('-c', '--continue', dest='contine', action='store_true',
+parser.add_argument('-c', '--continue', dest='continue', action='store_true',
                     help='continue training')
 parser.add_argument('-g', '--gamma', default=1, type=float,
                     help="the value of gamma")
-parser.add_argument('--no-attention', default=True,
-                    action='store_false', help="use attention to instead of linear")
 parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'histogram', 'gamma_histogram'],
                     help='method of light flow')
 parser.add_argument('--loss', default='ce', type=str,
                     help='loss [ce]')
 parser.add_argument('--tag', default='', type=str, help='tag')
-parser.add_argument('--backbone', default='r34', type=str)
+parser.add_argument('--backbone', default='r18', type=str)
 parser.add_argument('--uncorrect-norm', action='store_true',
                     default=False, help='uncorrect norm')
 parser.add_argument('--no-trivial', action='store_true',
@@ -103,7 +101,7 @@ best_loss = 30
 warmUpEpoch = 5
 
 
-def seed_worker(worker_id):
+def seed_worker(_):
     worker_seed = torch.initial_seed() % 2 ** 32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
@@ -123,9 +121,6 @@ def main():
     g.manual_seed(seed)
 
     training_continue = args.contine
-    if not args.no_attention:
-        args.arch = 'dark_light_noAttention'
-
     suffix = f"method={args.method}_backbone={args.backbone}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_{args.tag}"
     headers = ['epoch', 'top1', 'top2', 'loss']
     with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
@@ -142,7 +137,8 @@ def main():
     width = 170
     height = 128
 
-    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}{args.backbone}_split{str(args.split)}_{args.tag}"
+    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}" \
+                   f"{args.backbone}_split{str(args.split)}_{args.tag}"
     if not os.path.exists(saveLocation):
         os.makedirs(saveLocation)
     writer = SummaryWriter(saveLocation)
@@ -178,7 +174,7 @@ def main():
     scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', patience=5, verbose=True)
 
-    print("Saving everything to directory %s." % (saveLocation))
+    print(f"Saving everything to directory {saveLocation}.")
     dataset = f'./datasets/{args.dataset}_frames'
 
     cudnn.benchmark = True
@@ -191,20 +187,18 @@ def main():
     clip_mean = [0.0702773, 0.06571121, 0.06437492] * args.num_seg * length
     clip_std = [0.08475896, 0.08116068, 0.07479476] * args.num_seg * length
 
-    # normalize = video_transforms.Normalize(mean=clip_mean,
-    #                                        std=clip_std)
     if args.uncorrect_norm:
         print('Using uncorrected norm')
-        normalize = video_transforms.NormalizeBothStream(mean=clip_mean_light,
-                                                         std=clip_std_light,
-                                                         mean_light=clip_mean_light,
-                                                         std_light=clip_std_light)
+        normalize = video_transforms.Normalize(mean=clip_mean_light,
+                                               std=clip_std_light)
     else:
         print('Using corrected norm')
-        normalize = video_transforms.NormalizeBothStream(mean=clip_mean,
-                                                         std=clip_std,
-                                                         mean_light=clip_mean_light,
-                                                         std_light=clip_std_light)
+        if args.light:
+            normalize = video_transforms.Normalize(mean=clip_mean_light,
+                                                   std=clip_std_light)
+        else:
+            normalize = video_transforms.Normalize(mean=clip_mean,
+                                                   std=clip_std)
 
     train_transforms = [
         video_transforms.MultiScaleCrop(
@@ -246,31 +240,33 @@ def main():
         print("No split file exists in %s directory. Preprocess the dataset first" % (
             args.settings))
     # load dataset
-    train_dataset = datasets.__dict__[args.dataset](root=dataset,
-                                                    modality="rgb",
-                                                    source=train_split_file,
-                                                    phase="train",
-                                                    is_color=is_color,
-                                                    new_length=length,
-                                                    new_width=width,
-                                                    new_height=height,
-                                                    video_transform=train_transform,
-                                                    num_segments=args.num_seg,
-                                                    gamma=args.gamma,
-                                                    method=args.method)
+    train_dataset = datasets.EE6222(root=dataset,
+                                    modality="rgb",
+                                    source=train_split_file,
+                                    phase="train",
+                                    is_color=is_color,
+                                    new_length=length,
+                                    new_width=width,
+                                    new_height=height,
+                                    video_transform=train_transform,
+                                    num_segments=args.num_seg,
+                                    gamma=args.gamma,
+                                    method=args.method,
+                                    light=args.light)
 
-    val_dataset = datasets.__dict__[args.dataset](root=dataset,
-                                                  modality="rgb",
-                                                  source=val_split_file,
-                                                  phase="val",
-                                                  is_color=is_color,
-                                                  new_length=length,
-                                                  new_width=width,
-                                                  new_height=height,
-                                                  video_transform=val_transform,
-                                                  num_segments=args.num_seg,
-                                                  gamma=args.gamma,
-                                                  method=args.method)
+    val_dataset = datasets.EE6222(root=dataset,
+                                  modality="rgb",
+                                  source=val_split_file,
+                                  phase="val",
+                                  is_color=is_color,
+                                  new_length=length,
+                                  new_width=width,
+                                  new_height=height,
+                                  video_transform=val_transform,
+                                  num_segments=args.num_seg,
+                                  gamma=args.gamma,
+                                  method=args.method,
+                                  light=args.light)
 
     print('{} samples found, {} train data and {} test data.'.format(len(val_dataset) + len(train_dataset),
                                                                      len(train_dataset),
@@ -460,7 +456,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
             print('[%d] time: %.3f loss: %.4f' %
                   (i, batch_time.avg, lossesClassification.avg))
 
-    print(f'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}' 
+    print(f'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}'
           f'Classification Loss {lossesClassification.avg:.4f}')
     with open('train_record_%s.csv' % suffix, 'a', newline='') as f:
         record = csv.writer(f)

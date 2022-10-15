@@ -9,7 +9,7 @@ import numbers
 import cv2
 import math
 from torch import Tensor
-from torchvision.transforms import InterpolationMode, functional as F
+from torchvision.transforms import TrivialAugmentWide, InterpolationMode, functional as F
 
 
 class Compose(object):
@@ -22,14 +22,14 @@ class Compose(object):
     def __init__(self, video_transforms):
         self.video_transforms = video_transforms
 
-    def __call__(self, clips):
+    def __call__(self, clips, clips_light):
         # for t in self.video_transforms[:-1]:
         #     clips, clips_light = t(clips, clips_light)
         # clips = self.video_transforms[-1](clips)
         # clips_light = self.video_transforms[-1](clips_light)
         for t in self.video_transforms:
-            clips = t(clips)
-        return clips
+            clips, clips_light = t(clips, clips_light)
+        return clips, clips_light
 
 
 class ToTensor(object):
@@ -41,13 +41,14 @@ class ToTensor(object):
         if isinstance(clips, np.ndarray):
             # handle numpy array
             clips = torch.from_numpy(clips.transpose((2, 0, 1)))
+            clips_light = torch.from_numpy(clips_light.transpose((2, 0, 1)))
             # backward compatibility
-            return clips.float().div(255.0)
+            return clips.float().div(255.0), clips_light.float().div(255.0)
         if isinstance(clips, torch.Tensor):
-            return clips.float().div(255.0)
+            return clips.float().div(255.0), clips_light.float().div(255.0)
 
 
-class Normalize(object):
+class NormalizeBothStream(object):
     """Given mean: (R, G, B) and std: (R, G, B),
     will normalize each channel of the torch.*Tensor, i.e.
     channel = (channel - mean) / std
@@ -56,21 +57,25 @@ class Normalize(object):
     If new_length = 1, it falls back to single image case (3 channel)
     """
 
-    def __init__(self, mean, std):
+    def __init__(self, mean, std, mean_light, std_light):
         self.mean = mean
         self.std = std
+        self.mean_light = mean_light
+        self.std_light = std_light
 
-    def __call__(self, tensor):
+    def __call__(self, tensor, tensor_light):
         # TODO: make efficient
         torch_mean = torch.tensor([[self.mean]]).view(-1, 1, 1).float()
         torch_std = torch.tensor([[self.std]]).view(-1, 1, 1).float()
         tensor2 = (tensor - torch_mean) / torch_std
-        # for t, m, s in zip(tensor, self.mean, self.std):
-        #     t.sub_(m).div_(s)
-        return tensor2
+
+        torch_mean_light = torch.tensor([[self.mean_light]]).view(-1, 1, 1).float()
+        torch_std_light = torch.tensor([[self.std_light]]).view(-1, 1, 1).float()
+        tensor2_light = (tensor_light - torch_mean_light) / torch_std_light
+        return tensor2, tensor2_light
 
 
-class DeNormalize(object):
+class DeNormalizeBothStream(object):
     """Given mean: (R, G, B) and std: (R, G, B),
     will normalize each channel of the torch.*Tensor, i.e.
     channel = (channel - mean) / std
@@ -79,18 +84,22 @@ class DeNormalize(object):
     If new_length = 1, it falls back to single image case (3 channel)
     """
 
-    def __init__(self, mean, std):
+    def __init__(self, mean, std, mean_light, std_light):
         self.mean = mean
         self.std = std
+        self.mean_light = mean_light
+        self.std_light = std_light
 
-    def __call__(self, tensor):
+    def __call__(self, tensor, tensor_light):
         # TODO: make efficient
         torch_mean = torch.tensor([[self.mean]]).view(-1, 1, 1).float()
         torch_std = torch.tensor([[self.std]]).view(-1, 1, 1).float()
         tensor2 = (tensor * torch_std) + torch_mean
-        # for t, m, s in zip(tensor, self.mean, self.std):
-        #     t.sub_(m).div_(s)
-        return tensor2
+
+        torch_mean_light = torch.tensor([[self.mean_light]]).view(-1, 1, 1).float()
+        torch_std_light = torch.tensor([[self.std_light]]).view(-1, 1, 1).float()
+        tensor2_light = (tensor_light * torch_std_light) + torch_mean_light
+        return tensor2, tensor2_light
 
 
 class VideoTrivialAugment(torch.nn.Module):
@@ -174,15 +183,21 @@ class VideoTrivialAugment(torch.nn.Module):
         if c % 3 == 0:
             is_color = True
 
+        # print(f'is color: {is_color}, ${img.shape}')
         img = (img * 255.).type(torch.uint8)
+        img_light = (img_light * 255.).type(torch.uint8)
         if is_color:
             num_imgs = int(c / 3)
             scaled_clips = torch.zeros((c, h, w))
+            scaled_clips_light = torch.zeros((c, h, w))
             for frame_id in range(num_imgs):
                 scaled_clips[frame_id * 3:frame_id * 3 + 3, :, :] \
                     = _apply_op(img[frame_id * 3:frame_id * 3 + 3, :, :] * self.max_value, op_name, magnitude,
                                 interpolation=self.interpolation, fill=fill)
-            return scaled_clips
+                scaled_clips_light[frame_id * 3:frame_id * 3 + 3, :, :] \
+                    = _apply_op(img_light[frame_id * 3:frame_id * 3 + 3, :, :] * self.max_value, op_name, magnitude,
+                                interpolation=self.interpolation, fill=fill)
+            return scaled_clips, scaled_clips_light
         else:
             raise NotImplementedError('not implement yet')
 
@@ -306,10 +321,13 @@ class CenterCrop(object):
             scaled_clips_light = np.zeros((th, tw, c))
             for frame_id in range(num_imgs):
                 cur_img = clips[:, :, frame_id * 3:frame_id * 3 + 3]
+                cur_img_light = clips_light[:, :, frame_id * 3:frame_id * 3 + 3]
                 crop_img = cur_img[y1:y1 + th, x1:x1 + tw, :]
+                crop_img_light = cur_img_light[y1:y1 + th, x1:x1 + tw, :]
                 assert (crop_img.shape == (th, tw, 3))
                 scaled_clips[:, :, frame_id * 3:frame_id * 3 + 3] = crop_img
-            return scaled_clips
+                scaled_clips_light[:, :, frame_id * 3:frame_id * 3 + 3] = crop_img_light
+            return scaled_clips, scaled_clips_light
         else:
             num_imgs = int(c / 1)
             scaled_clips = np.zeros((th, tw, c))
@@ -331,7 +349,9 @@ class RandomHorizontalFlip(object):
         if random.random() < 0.5:
             clips = np.fliplr(clips)
             clips = np.ascontiguousarray(clips)
-        return clips
+            clips_light = np.fliplr(clips_light)
+            clips_light = np.ascontiguousarray(clips_light)
+        return clips, clips_light
 
 
 class MultiScaleCrop(object):
@@ -419,17 +439,23 @@ class MultiScaleCrop(object):
             w_off = random.randint(0, w - self.width)
 
         scaled_clips = np.zeros((self.height, self.width, c))
+        scaled_clips_light = np.zeros((self.height, self.width, c))
         if is_color:
             num_imgs = int(c / 3)
             for frame_id in range(num_imgs):
                 cur_img = clips[:, :, frame_id * 3:frame_id * 3 + 3]
+                cur_img_light = clips_light[:, :, frame_id * 3:frame_id * 3 + 3]
                 crop_img = cur_img[h_off:h_off + crop_height, w_off:w_off + crop_width, :]
+                crop_img_light = cur_img_light[h_off:h_off + crop_height, w_off:w_off + crop_width, :]
                 scaled_clips[:, :, frame_id * 3:frame_id * 3 + 3] = cv2.resize(crop_img, (self.width, self.height),
                                                                                self.interpolation)
+                scaled_clips_light[:, :, frame_id * 3:frame_id * 3 + 3] = cv2.resize(crop_img_light,
+                                                                                     (self.width, self.height),
+                                                                                     self.interpolation)
             if not selectedRegionOutput:
-                return scaled_clips
+                return scaled_clips, scaled_clips_light
             else:
-                return scaled_clips, off_sel
+                return scaled_clips, scaled_clips_light, off_sel
         else:
             num_imgs = int(c / 1)
             for frame_id in range(num_imgs):

@@ -68,7 +68,8 @@ def ReadSegmentRGB(path, offsets, new_height, new_width, new_length, is_color, n
     return clip_input
 
 
-def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration, gamma, method):
+def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration, gamma,
+                         method):
     if is_color:
         cv_read_flag = cv2.IMREAD_COLOR  # > 0
     else:
@@ -112,44 +113,6 @@ def ReadSegmentRGB_light(path, offsets, new_height, new_width, new_length, is_co
     return clip_input
 
 
-def ReadSegmentFlow(path, offsets, new_height, new_width, new_length, is_color, name_pattern, duration):
-    if is_color:
-        cv_read_flag = cv2.IMREAD_COLOR  # > 0
-    else:
-        cv_read_flag = cv2.IMREAD_GRAYSCALE  # = 0
-    interpolation = cv2.INTER_LINEAR
-
-    sampled_list = []
-    for offset_id in range(len(offsets)):
-        offset = offsets[offset_id]
-        for length_id in range(1, new_length + 1):
-            loaded_frame_index = length_id + offset
-            moded_loaded_frame_index = loaded_frame_index % (duration + 1)
-            if moded_loaded_frame_index == 0:
-                moded_loaded_frame_index = (duration + 1)
-            frame_name_x = name_pattern % ("x", moded_loaded_frame_index)
-            frame_path_x = path + "/" + frame_name_x
-            cv_img_origin_x = cv2.imread(frame_path_x, cv_read_flag)
-            frame_name_y = name_pattern % ("y", moded_loaded_frame_index)
-            frame_path_y = path + "/" + frame_name_y
-            cv_img_origin_y = cv2.imread(frame_path_y, cv_read_flag)
-            if cv_img_origin_x is None or cv_img_origin_y is None:
-                print("Could not load file %s or %s" % (frame_path_x, frame_path_y))
-                sys.exit()
-                # TODO: error handling here
-            if new_width > 0 and new_height > 0:
-                cv_img_x = cv2.resize(cv_img_origin_x, (new_width, new_height), interpolation)
-                cv_img_y = cv2.resize(cv_img_origin_y, (new_width, new_height), interpolation)
-            else:
-                cv_img_x = cv_img_origin_x
-                cv_img_y = cv_img_origin_y
-            sampled_list.append(np.expand_dims(cv_img_x, 2))
-            sampled_list.append(np.expand_dims(cv_img_y, 2))
-
-    clip_input = np.concatenate(sampled_list, axis=2)
-    return clip_input
-
-
 class EE6222(data.Dataset):
 
     def __init__(self,
@@ -168,7 +131,8 @@ class EE6222(data.Dataset):
                  video_transform=None,
                  ensemble_training=False,
                  gamma=None,
-                 method='gamma'):
+                 method='gamma',
+                 light=False):
 
         classes, class_to_idx = find_classes(root)
         clips = make_dataset(root, source)
@@ -183,6 +147,7 @@ class EE6222(data.Dataset):
         self.source = source
         self.phase = phase
         self.modality = modality
+        self.light = light
 
         self.classes = classes
         self.class_to_idx = class_to_idx
@@ -241,7 +206,19 @@ class EE6222(data.Dataset):
             else:
                 print("Only phase train and val are supported.")
 
-        if self.modality == "rgb":
+        if self.light:
+            clip_input = ReadSegmentRGB_light(path,
+                                              offsets,
+                                              self.new_height,
+                                              self.new_width,
+                                              self.new_length,
+                                              self.is_color,
+                                              self.name_pattern,
+                                              duration,
+                                              gamma=self.gamma,
+                                              method=self.method
+                                              )
+        else:
             clip_input = ReadSegmentRGB(path,
                                         offsets,
                                         self.new_height,
@@ -251,28 +228,15 @@ class EE6222(data.Dataset):
                                         self.name_pattern,
                                         duration
                                         )
-            clip_input_light = ReadSegmentRGB_light(path,
-                                                    offsets,
-                                                    self.new_height,
-                                                    self.new_width,
-                                                    self.new_length,
-                                                    self.is_color,
-                                                    self.name_pattern,
-                                                    duration,
-                                                    gamma=self.gamma,
-                                                    method=self.method
-                                                    )
-        else:
-            print("No such modality %s" % (self.modality))
 
         if self.transform is not None:
             clip_input = self.transform(clip_input)
-            clip_input_light = self.transform(clip_input_light)
         if self.target_transform is not None:
             target = self.target_transform(target)
         if self.video_transform is not None:
-            clip_input, clip_input_light = self.video_transform(clip_input, clip_input_light)
-        return clip_input, clip_input_light, target
+            clip_input = self.video_transform(clip_input)
+        return clip_input, target
 
-    def __len__(self):
-        return len(self.clips)
+
+def __len__(self):
+    return len(self.clips)
