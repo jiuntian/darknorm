@@ -1,3 +1,5 @@
+import logging
+
 import torch.utils.data as data
 
 import os
@@ -172,6 +174,7 @@ class EE6222(data.Dataset):
         self.target_transform = target_transform
         self.video_transform = video_transform
         self.method = method
+        logging.info(f"Dataset: Use {'light' if self.light else 'dark'}!")
 
     def __getitem__(self, index):
         path, duration, target = self.clips[index]
@@ -237,6 +240,5 @@ class EE6222(data.Dataset):
             clip_input = self.video_transform(clip_input)
         return clip_input, target
 
-
-def __len__(self):
-    return len(self.clips)
+    def __len__(self):
+        return len(self.clips)

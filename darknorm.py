@@ -7,30 +7,28 @@ This repository is based on the repository at https://github.com/artest08/LateTe
 This repository is authored by Jiajun Chen
 We thank the authors for the repository.
 """
-
+import logging
 import os
 import time
 import argparse
 import random
+import csv
 
 import numpy as np
-
+import tqdm
 import torch
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
+from torch.optim import lr_scheduler
 import torch.utils.data
 from tensorboardX import SummaryWriter
 
-from torch.optim import lr_scheduler
 import video_transforms
 import models
 import datasets
 from loss import CELoss
 from opt.AdamW import AdamW
-
-import csv
-
 from utils.util import save_checkpoint, AverageMeter, accuracy
 
 model_names = sorted(name for name in models.__dict__
@@ -78,7 +76,7 @@ parser.add_argument('--num-seg', default=1, type=int,
 #                    help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
-parser.add_argument('-c', '--continue', dest='continue', action='store_true',
+parser.add_argument('-c', '--continue', dest='continue_training', action='store_true',
                     help='continue training')
 parser.add_argument('-g', '--gamma', default=1, type=float,
                     help="the value of gamma")
@@ -120,50 +118,57 @@ def main():
     g = torch.Generator()
     g.manual_seed(seed)
 
-    training_continue = args.contine
-    suffix = f"method={args.method}_backbone={args.backbone}_loss={args.loss}_ga={args.gamma}_b={args.batch_size}_{args.tag}"
+    training_continue = args.continue_training
+    suffix = f"net={args.backbone}_light={args.light}_triv={not args.no_trivial}_b={args.batch_size}" \
+             f"_norm={not args.uncorrect_norm}_{args.tag}"
     headers = ['epoch', 'top1', 'top2', 'loss']
-    with open('train_record_%s.csv' % suffix, 'w', newline='') as f:
+    if not os.path.exists("logs"):
+        os.makedirs("logs")
+    with open('logs/train_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
         record.writerow(headers)
-
-    with open('validate_record_%s.csv' % suffix, 'w', newline='') as f:
+    with open('logs/validate_record_%s.csv' % suffix, 'w', newline='') as f:
         record = csv.writer(f)
         record.writerow(headers)
-
-    print(f'work in {suffix}')
 
     input_size = 112
     width = 170
     height = 128
 
-    saveLocation = f"./checkpoint/{args.method}_{args.loss}_{args.dataset}_{args.arch}" \
-                   f"{args.backbone}_split{str(args.split)}_{args.tag}"
-    if not os.path.exists(saveLocation):
-        os.makedirs(saveLocation)
-    writer = SummaryWriter(saveLocation)
+    save_location = f"./checkpoints/{args.method}_{args.loss}_{args.dataset}_{args.arch}" \
+                    f"{args.backbone}_split{str(args.split)}_{args.tag}"
+    if not os.path.exists(save_location):
+        os.makedirs(save_location)
+    stream_handler = logging.StreamHandler()
+    logging.basicConfig(filename=f'{save_location}/log.txt', filemode='a',
+                        format='%(levelname)s %(asctime)s: %(message)s',
+                        datefmt='%d-%m-%y %H:%M:%S', level=logging.INFO)
+    stream_handler.setFormatter(logging.Formatter('%(levelname)s %(asctime)s: %(message)s', '%d-%m-%y %H:%M:%S'))
+    logging.getLogger().addHandler(stream_handler)
+    logging.info(f'work in {suffix}')
+    writer = SummaryWriter(save_location)
 
     # create model
 
     if args.evaluate:
-        print("Building validation model ... ")
+        logging.info("Building validation model ... ")
         model = build_model_validate()
         optimizer = AdamW(model.parameters(), lr=args.lr,
                           weight_decay=args.weight_decay)
     elif training_continue:
-        model, startEpoch, optimizer, best_acc1 = build_model_continue()
+        model, start_epoch, optimizer, best_acc1 = build_model_continue()
         for param_group in optimizer.param_groups:
             lr = param_group['lr']
-        print("Continuing with best precision: %.3f and start epoch %d and lr: %f" % (
-            best_acc1, startEpoch, lr))
+        logging.info("Continuing with best precision: %.3f and start epoch %d and lr: %f" % (
+            best_acc1, start_epoch, lr))
     else:
-        print("Building model with ADAMW... ")
+        logging.info("Building model with ADAMW... ")
         model = build_model()
         optimizer = AdamW(model.parameters(), lr=args.lr,
                           weight_decay=args.weight_decay)
-        startEpoch = 0
+        start_epoch = 0
 
-    print("Model %s is loaded. " % (args.arch))
+    logging.info("Model %s is loaded. " % args.arch)
 
     # define loss function (criterion) and optimizer
     if args.loss == 'ce':
@@ -174,7 +179,7 @@ def main():
     scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, 'min', patience=5, verbose=True)
 
-    print(f"Saving everything to directory {saveLocation}.")
+    logging.info(f"Saving everything to directory {save_location}.")
     dataset = f'./datasets/{args.dataset}_frames'
 
     cudnn.benchmark = True
@@ -188,11 +193,11 @@ def main():
     clip_std = [0.08475896, 0.08116068, 0.07479476] * args.num_seg * length
 
     if args.uncorrect_norm:
-        print('Using uncorrected norm')
+        logging.info('Using uncorrected norm')
         normalize = video_transforms.Normalize(mean=clip_mean_light,
                                                std=clip_std_light)
     else:
-        print('Using corrected norm')
+        logging.info('Using corrected norm')
         if args.light:
             normalize = video_transforms.Normalize(mean=clip_mean_light,
                                                    std=clip_std_light)
@@ -208,18 +213,18 @@ def main():
     ]
 
     if not args.no_trivial:
-        print('using trivial')
+        logging.info('using trivial')
         train_transforms.extend([
             video_transforms.VideoTrivialAugment(),  # required input [0-1]
             video_transforms.ToTensor(),
         ])
     else:
-        print('not using trivial')
+        logging.info('not using trivial')
 
     train_transforms.append(normalize)
 
-    print("Train transforms: ")
-    print(train_transforms)
+    logging.info("Train transforms: ")
+    logging.info(train_transforms)
 
     train_transform = video_transforms.Compose(train_transforms)
 
@@ -237,7 +242,7 @@ def main():
     val_split_file = os.path.join(
         args.settings, args.dataset, val_setting_file)
     if not os.path.exists(train_split_file) or not os.path.exists(val_split_file):
-        print("No split file exists in %s directory. Preprocess the dataset first" % (
+        logging.info("No split file exists in %s directory. Preprocess the dataset first" % (
             args.settings))
     # load dataset
     train_dataset = datasets.EE6222(root=dataset,
@@ -268,9 +273,9 @@ def main():
                                   method=args.method,
                                   light=args.light)
 
-    print('{} samples found, {} train data and {} test data.'.format(len(val_dataset) + len(train_dataset),
-                                                                     len(train_dataset),
-                                                                     len(val_dataset)))
+    logging.info('{} samples found, {} train data and {} test data.'.format(len(val_dataset) + len(train_dataset),
+                                                                            len(train_dataset),
+                                                                            len(val_dataset)))
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -279,7 +284,7 @@ def main():
         worker_init_fn=seed_worker,
         generator=g
     )
-    print(train_loader)
+    logging.info(train_loader)
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=args.batch_size, shuffle=False,
@@ -293,9 +298,9 @@ def main():
             val_loader, model, criterion, -1)
         return
 
-    for epoch in range(startEpoch, args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         if optimizer.param_groups[0]['lr'] <= 1e-7:
-            print('Cannot further reduce lr, early stopping')
+            logging.info('Cannot further reduce lr, early stopping')
             break
         train(train_loader, model, criterion, optimizer, epoch)
 
@@ -313,14 +318,13 @@ def main():
         # remember best prec@1 and save checkpoint
 
         is_best = acc1 >= best_acc1
-        # is_best = lossClassification <= best_loss
         best_loss = min(lossClassification, best_loss)
         best_acc1 = max(acc1, best_acc1)
 
         if (epoch + 1) % args.save_freq == 0:
             checkpoint_name = "checkpoint.pth.tar"
             if is_best:
-                print("Saved Best Model")
+                logging.info("Saved Best Model")
                 save_checkpoint({
                     'epoch': epoch + 1,
                     'arch': args.arch,
@@ -328,7 +332,7 @@ def main():
                     'best_acc1': best_acc1,
                     'best_loss': best_loss,
                     'optimizer': optimizer.state_dict(),
-                }, is_best, checkpoint_name, saveLocation)
+                }, is_best, checkpoint_name, save_location)
 
     checkpoint_name = "%03d_%s" % (epoch + 1, "checkpoint.pth.tar")
     save_checkpoint({
@@ -338,7 +342,7 @@ def main():
         'best_acc1': best_acc1,
         'best_loss': best_loss,
         'optimizer': optimizer.state_dict(),
-    }, is_best, checkpoint_name, saveLocation)
+    }, is_best, checkpoint_name, save_location)
     writer.export_scalars_to_json("./all_scalars.json")
     writer.close()
 
@@ -346,7 +350,7 @@ def main():
 def build_model():
     # args.arch：dark_light
     model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, backbone=args.backbone)
-    print(f'loaded model with backbone {args.backbone}')
+    logging.info(f'loaded model with backbone {args.backbone}')
     if torch.cuda.device_count() > 1:
         model = torch.nn.DataParallel(model)
     model = model.cuda()
@@ -355,11 +359,11 @@ def build_model():
 
 
 def build_model_validate():
-    modelLocation = "./checkpoint/" + args.dataset + \
+    modelLocation = "./checkpoints/" + args.dataset + \
                     "_" + args.arch + "_split" + str(args.split)
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
-    print(modelLocation)
+    logging.info(modelLocation)
     model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, backbone=args.backbone)
 
     if torch.cuda.device_count() > 1:
@@ -372,11 +376,11 @@ def build_model_validate():
 
 
 def build_model_continue():
-    modelLocation = "./checkpoint/" + args.dataset + \
+    modelLocation = "./checkpoints/" + args.dataset + \
                     "_" + args.arch + "_split" + str(args.split)
     model_path = os.path.join(modelLocation, 'model_best.pth.tar')
     params = torch.load(model_path)
-    print(modelLocation)
+    logging.info(modelLocation)
     model = models.__dict__[args.arch](
         num_classes=10, length=args.num_seg)
 
@@ -394,7 +398,6 @@ def build_model_continue():
     return model, startEpoch, optimizer, best_acc
 
 
-# 进入
 def train(train_loader, model, criterion, optimizer, epoch):
     batch_time = AverageMeter()
     lossesClassification = AverageMeter()
@@ -411,10 +414,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
     acc_mini_batch_top2 = 0.0
     totalSamplePerIter = 0
     for i, input in enumerate(train_loader):
-        if args.light:
-            (_, inputs, targets) = input  # light
-        else:
-            (inputs, _, targets) = input  # dark
+        (inputs, targets) = input
         inputs = inputs.view(-1, length, 3, input_size,
                              input_size).transpose(1, 2)
         inputs = inputs.cuda()
@@ -453,11 +453,11 @@ def train(train_loader, model, criterion, optimizer, epoch):
             totalSamplePerIter = 0.0
 
         if (i + 1) % args.print_freq == 0:
-            print('[%d] time: %.3f loss: %.4f' %
-                  (i, batch_time.avg, lossesClassification.avg))
+            logging.info('[%d] time: %.3f loss: %.4f' %
+                         (i, batch_time.avg, lossesClassification.avg))
 
-    print(f'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}'
-          f'Classification Loss {lossesClassification.avg:.4f}')
+    logging.info(f'train * Epoch: {epoch} Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}'
+                 f'Classification Loss {lossesClassification.avg:.4f}')
     with open('train_record_%s.csv' % suffix, 'a', newline='') as f:
         record = csv.writer(f)
         record.writerow([epoch, round(top1.avg, 3), round(
@@ -479,10 +479,7 @@ def validate(val_loader, model, criterion, epoch):
     end = time.time()
     with torch.no_grad():
         for i, input in enumerate(val_loader):
-            if args.light:
-                (_, inputs, targets) = input  # light
-            else:
-                (inputs, _, targets) = input  # dark
+            (inputs, targets) = input
             inputs = inputs.view(-1, length, 3, input_size,
                                  input_size).transpose(1, 2)
             inputs = inputs.cuda()
@@ -507,8 +504,8 @@ def validate(val_loader, model, criterion, epoch):
             batch_time.update(time.time() - end)
             end = time.time()
 
-        print(f'validate * * Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}'
-              f'Classification Loss {lossesClassification.avg:.4f}\n')
+        logging.info(f'validate * * Prec@1 {top1.avg:.3f} Prec@5 {top2.avg:.3f}'
+                     f'Classification Loss {lossesClassification.avg:.4f}')
         with open('validate_record_%s.csv' % suffix, 'a', newline='') as f:
             record = csv.writer(f)
             record.writerow([epoch, round(top1.avg, 3), round(

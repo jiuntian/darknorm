@@ -23,10 +23,6 @@ class Compose(object):
         self.video_transforms = video_transforms
 
     def __call__(self, clips):
-        # for t in self.video_transforms[:-1]:
-        #     clips, clips_light = t(clips, clips_light)
-        # clips = self.video_transforms[-1](clips)
-        # clips_light = self.video_transforms[-1](clips_light)
         for t in self.video_transforms:
             clips = t(clips)
         return clips
@@ -37,7 +33,7 @@ class ToTensor(object):
     [0, 255] to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0].
     """
 
-    def __call__(self, clips, clips_light):
+    def __call__(self, clips):
         if isinstance(clips, np.ndarray):
             # handle numpy array
             clips = torch.from_numpy(clips.transpose((2, 0, 1)))
@@ -141,7 +137,7 @@ class VideoTrivialAugment(torch.nn.Module):
             "Equalize": (torch.tensor(0.0), False),
         }
 
-    def forward(self, img: Tensor, img_light) -> Tuple[Tensor, Tensor]:
+    def forward(self, img: Tensor) -> Tuple[Tensor, Tensor]:
         """
             img (PIL Image or Tensor): Image to be transformed.
 
@@ -290,7 +286,7 @@ class CenterCrop(object):
         else:
             self.size = size
 
-    def __call__(self, clips, clips_light):
+    def __call__(self, clips):
         h, w, c = clips.shape
         th, tw = self.size
         x1 = int(round((w - tw) / 2.))
@@ -303,7 +299,6 @@ class CenterCrop(object):
         if is_color:
             num_imgs = int(c / 3)
             scaled_clips = np.zeros((th, tw, c))
-            scaled_clips_light = np.zeros((th, tw, c))
             for frame_id in range(num_imgs):
                 cur_img = clips[:, :, frame_id * 3:frame_id * 3 + 3]
                 crop_img = cur_img[y1:y1 + th, x1:x1 + tw, :]
@@ -325,7 +320,7 @@ class RandomHorizontalFlip(object):
     """Randomly horizontally flips the given numpy array with a probability of 0.5
     """
 
-    def __call__(self, clips, clips_light):
+    def __call__(self, clips):
         # clips = np.fliplr(clips)
         # clips = np.ascontiguousarray(clips)
         if random.random() < 0.5:
@@ -398,7 +393,7 @@ class MultiScaleCrop(object):
 
         return crop_sizes
 
-    def __call__(self, clips, clips_light, selectedRegionOutput=False):
+    def __call__(self, clips, selectedRegionOutput=False):
         h, w, c = clips.shape
         is_color = False
         if c % 3 == 0:

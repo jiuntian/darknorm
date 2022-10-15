@@ -4,6 +4,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
+  - tqdm
   - opencv
   - pip=21.0.1
   - python=3.8
