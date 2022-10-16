@@ -1,23 +1,18 @@
+# DarkNorm
+DarkNorm, a simple dark standardization and Video TrivialAugment is all you need for 
+hyperparameter-less action recognition in dark.
 
-**This code will be published on May 1, 2021**
-
-# Darklight CNN
-
-Paper : [DarkLight Networks for Action Recognition in the Dark | IEEE Conference Publication | IEEE Xplore](https://ieeexplore.ieee.org/document/9522760)
-
-DarkLight Networks，a high-efficiency 3D Convolution network for low light illumination action recognition. 
-
-This repository is modeling on the foundation of LateTemporalModeling3DCNN architectures and taking advantage of self-attention to build the classification network. 
+This repository is modeling on the foundation of DarkLight pytorch code. Thanks the author(s) for their great work.
 
 ## Dependencies
 
 The code runs on Python 3.8 but in fact it is not a big deal to try to construct a low version Python. You can create a conda environment with all the dependecies by running 
 
-```python
-conda env create -f requirements.yml -n <env_name>
+```bash
+conda env create -f requirements.yml -n darknorm
 ```
 
-Note: this project needs the CUDA 11.1
+Note: this project needs the CUDA 11.3
 
 ## Dataset Preparation
 
@@ -31,19 +26,11 @@ The format of the frames like as "img_%05d.jpg"
 
 ### Training with tow view
 
-training with attention
-
+Reproducing training results
+We run the experiments with two NVIDIA V100 16GB GPU. Please use the same setting to reproduce the exact result.
 ```
-python darklight.py --split=1 --batch-size=8 --gamma=1.8 --both-flow = True
+python ??
 ```
-
-training without attention
-
-```
-python darklight.py --split=1 --batch-size=8 --gamma=1.8 --both-flow = True --no_attention
-```
-
-For multi-gpu training, comment the two lines below os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID" os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 To continue the training from the best model, add -c. To evaluate the single clip single crop performance of best model, add -e
 
@@ -54,10 +41,8 @@ python spatial_demo_bert.py  --split=1
 ```
 
 ## Related Projects
-
-[R2+1D-IG65](https://github.com/moabitcoin/ig65m-pytorch): IG-65M Pytorch
-
-[self-attention-cv](https://github.com/The-AI-Summer/self-attention-cv):self-attention-cv Pytorch
+We thank author of Darklight for the base of this repo.
+[Darklight](https://github.com/Ticuby/Darklight-Pytorch): Darklight-Pytorch
 
 [LateTemporalModeling3DCNN](https://github.com/artest08/LateTemporalModeling3DCNN):2_Plus_1D_BERT
 

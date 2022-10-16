@@ -2,24 +2,16 @@
 import os
 import sys
 import numpy as np
-import math
 import cv2
-import scipy.io as sio
 
 import torch
 import torch.nn as nn
 import torch.nn.parallel
-import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
-import torchvision.models as models
-
 
 sys.path.insert(0, "../../")
 import video_transforms
-from datasets import img_transforms
 
 soft=nn.Softmax(dim=1)
 def VideoSpatialPrediction3D_attention(

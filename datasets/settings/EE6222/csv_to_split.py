@@ -17,5 +17,5 @@ def csv_deal(csv_file: str, csv_type):
                 write_txt.write(write_thing)
 
 
-# csv_deal("train.txt", "train")
+csv_deal("train.txt", "train")
 csv_deal("validate.txt", "val")

@@ -13,6 +13,7 @@ import time
 import argparse
 import random
 import csv
+os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:8"
 
 import numpy as np
 import tqdm
@@ -78,7 +79,7 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('-c', '--continue', dest='continue_training', action='store_true',
                     help='continue training')
-parser.add_argument('-g', '--gamma', default=1, type=float,
+parser.add_argument('-g', '--gamma', default=1.8, type=float,
                     help="the value of gamma")
 parser.add_argument('--method', default='gamma', type=str, choices=['gamma', 'histogram', 'gamma_histogram'],
                     help='method of light flow')
@@ -93,6 +94,7 @@ parser.add_argument('--no-trivial', action='store_true',
 parser.add_argument('--normalize-first', action='store_true',
                     default=False, help='normalize first before trivial')
 parser.add_argument('--light', default=False, action='store_true', help='use light stream')
+parser.add_argument('--seed', default=3407, type=int, help='seed for reproducibility')
 
 best_acc1 = 0
 best_loss = 30
@@ -109,7 +111,7 @@ def main():
     global args, best_acc1, model, writer, best_loss, length, width, height, input_size, scheduler, suffix
     args = parser.parse_args()
 
-    seed = 0  # 3407
+    seed = args.seed  # 0  # 3407
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     random.seed(seed)
@@ -138,8 +140,8 @@ def main():
     width = 170
     height = 128
 
-    save_location = f"./checkpoints/{args.method}_{args.loss}_{args.dataset}_{args.arch}" \
-                    f"{args.backbone}_split{str(args.split)}_{args.tag}"
+    save_location = f"./checkpoints/{args.loss}_{args.dataset}_{args.arch}" \
+                    f"{args.backbone}_{args.tag}"
     if not os.path.exists(save_location):
         os.makedirs(save_location)
     stream_handler = logging.StreamHandler()
@@ -149,6 +151,7 @@ def main():
     stream_handler.setFormatter(logging.Formatter('%(levelname)s %(asctime)s: %(message)s', '%d-%m-%y %H:%M:%S'))
     logging.getLogger().addHandler(stream_handler)
     logging.info(f'work in {suffix}')
+    logging.info(f"using seed {args.seed}!")
     writer = SummaryWriter(save_location)
 
     # create model

@@ -7,7 +7,7 @@ import sys
 import random
 import numpy as np
 import cv2
-from . import img_transforms
+from utils import img_transforms
 
 
 def find_classes(dir):
