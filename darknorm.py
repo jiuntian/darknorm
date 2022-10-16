@@ -116,6 +116,7 @@ def main():
     np.random.seed(seed)
     cudnn.benchmark = False
     cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True)
 
     g = torch.Generator()
     g.manual_seed(seed)
