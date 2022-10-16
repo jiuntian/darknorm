@@ -114,6 +114,8 @@ def main():
     torch.cuda.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
+    cudnn.benchmark = False
+    cudnn.deterministic = True
 
     g = torch.Generator()
     g.manual_seed(seed)
@@ -182,7 +184,6 @@ def main():
     logging.info(f"Saving everything to directory {save_location}.")
     dataset = f'./datasets/{args.dataset}_frames'
 
-    cudnn.benchmark = True
     length = 64
     # Data transforming
     is_color = True
