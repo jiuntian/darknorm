@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed April 1 13:39:00 2021
+Created on 10 October 2022 by Jiun Tian Hoe
+This repository is based on the repository at https://github.com/Ticuby/Darklight-Pytorch
+We thank the authors for the repository.
+=======================================
 This repository is based on the repository at https://github.com/artest08/LateTemporalModeling3DCNN.
- We thank the authors for the repository.
+We thank the authors for the repository.
 This repository is authored by Jiajun Chen
 We thank the authors for the repository.
 """
@@ -13,7 +16,8 @@ import time
 import argparse
 import random
 import csv
-os.environ["CUBLAS_WORKSPACE_CONFIG"]=":4096:8"
+
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import numpy as np
 import tqdm
@@ -44,11 +48,11 @@ parser.add_argument('--settings', metavar='DIR', default='./datasets/settings',
 parser.add_argument('--dataset', '-d', default='EE6222',
                     choices=["EE6222"],
                     help='dataset: EE6222')
-parser.add_argument('--arch', '-a', default='dark_light',
+parser.add_argument('--arch', '-a', default='DarkNorm',
                     choices=model_names,
                     help='model architecture: ' +
                          ' | '.join(model_names) +
-                         '(default: dark_light)')
+                         '(default: DarkNorm)')
 parser.add_argument('-s', '--split', default=1, type=int, metavar='S',
                     help='which split of data to work on (default: 1)')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
@@ -73,8 +77,6 @@ parser.add_argument('--eval-freq', default=1, type=int,
                     metavar='N', help='eval frequency (default: 1)')
 parser.add_argument('--num-seg', default=1, type=int,
                     metavar='N', help='Number of segments in dataloader (default: 1)')
-# parser.add_argument('--resume', default='./dene4', type=str, metavar='PATH',
-#                    help='path to latest checkpoint (default: none)')
 parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                     help='evaluate model on validation set')
 parser.add_argument('-c', '--continue', dest='continue_training', action='store_true',
@@ -94,7 +96,7 @@ parser.add_argument('--no-trivial', action='store_true',
 parser.add_argument('--normalize-first', action='store_true',
                     default=False, help='normalize first before trivial')
 parser.add_argument('--light', default=False, action='store_true', help='use light stream')
-parser.add_argument('--seed', default=3407, type=int, help='seed for reproducibility')
+parser.add_argument('--seed', default=1234, type=int, help='seed for reproducibility')
 
 best_acc1 = 0
 best_loss = 30
@@ -338,6 +340,10 @@ def main():
                     'best_loss': best_loss,
                     'optimizer': optimizer.state_dict(),
                 }, is_best, checkpoint_name, save_location)
+
+    logging.info(f"Trained for {epoch + 1} epochs completed. "
+                 f"The best validation accuracy is {best_acc1}, "
+                 f"minimum validation loss is {best_loss}")
 
     checkpoint_name = "%03d_%s" % (epoch + 1, "checkpoint.pth.tar")
     save_checkpoint({

@@ -1,10 +1,12 @@
-checkpoint/*
-__pycache__/*
-.idea/*
-.ipynb_checkpoints/
-datasets/EE6222_frames/*
+checkpoint
+checkpoints
 __pycache__/
+.idea/
+.ipynb_checkpoints/
+datasets/ee6222
+datasets/EE6222_frames/
 datasets/EE6222_frames.zip
 train_*.csv
 validate_*.csv
 ori_*.csv
+all_scalars.json

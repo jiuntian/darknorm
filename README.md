@@ -27,9 +27,12 @@ The format of the frames like as "img_%05d.jpg"
 ### Training with tow view
 
 Reproducing training results
+
 We run the experiments with two NVIDIA V100 16GB GPU. Please use the same setting to reproduce the exact result.
+
+You should get best top 1 validation accuracy at 72.187 and with minimum loss of 0.9719.
 ```
-python ??
+CUDA_VISIBLE_DEVICES=0,1 python darknorm.py --batch-size=12 --workers 16 --arch DarkNorm --lr 0.0001 --tag triv_norm_8888 --seed 8888
 ```
 
 To continue the training from the best model, add -c. To evaluate the single clip single crop performance of best model, add -e
