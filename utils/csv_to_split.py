@@ -3,7 +3,7 @@ import csv
 
 
 def csv_deal(csv_file: str, csv_type):
-    path = '../../EE6222_frames/'
+    path = 'datasets/EE6222_frames/'
     with open(csv_file, newline="") as split_f:
         reader = csv.DictReader(split_f, delimiter="\t")
         save_txt = csv_type + '_' + "split1" + ".txt"
@@ -17,5 +17,5 @@ def csv_deal(csv_file: str, csv_type):
                 write_txt.write(write_thing)
 
 
-csv_deal("train.txt", "train")
-csv_deal("validate.txt", "val")
+csv_deal("datasets/ee6222/train.txt", "train")
+csv_deal("datasets/ee6222/validate.txt", "val")

@@ -1,8 +1,8 @@
 import cv2
 import os
 
-dir_names = os.listdir()
-path = '/raid2/jiuntian/ee6222/darklight/datasets/EE6222_frames/'
+dir_names = os.listdir('datasets/ee6222/train')
+path = 'datasets/EE6222_frames/'
 for dir_name in dir_names:
     print("Processing: %s" % dir_name)
     path_dir = os.path.join(path, dir_name)
@@ -19,13 +19,11 @@ for dir_name in dir_names:
             print("Cannot open camera")
             exit()
         while True:
-            # 逐帧捕获
             ret, frame = cap.read()
-            # 如果正确读取帧，ret为True
             if not ret:
                 print("Done: %s" % name, end="\r")
                 break
             cv2.imwrite(video_path + '/img_{0:05d}.jpg'.format(i), frame)
             i += 1
-        # 完成所有操作后，释放捕获器
         cap.release()
+print('Extraction completed')
