@@ -97,6 +97,7 @@ parser.add_argument('--normalize-first', action='store_true',
                     default=False, help='normalize first before trivial')
 parser.add_argument('--light', default=False, action='store_true', help='use light stream')
 parser.add_argument('--seed', default=1234, type=int, help='seed for reproducibility')
+parser.add_argument('--model-path', default='', type=str, help='path to evaluate (optional)')
 
 best_acc1 = 0
 best_loss = 30
@@ -370,11 +371,14 @@ def build_model():
 
 
 def build_model_validate():
-    modelLocation = "./checkpoints/" + args.dataset + \
-                    "_" + args.arch + "_split" + str(args.split)
-    model_path = os.path.join(modelLocation, 'model_best.pth.tar')
+    if args.model_path:
+        model_location = args.model_path
+    else:
+        model_location = f"./checkpoints/{args.loss}_{args.dataset}_{args.arch}" \
+                         f"{args.backbone}_{args.tag}"
+    model_path = os.path.join(model_location, 'model_best.pth.tar')
     params = torch.load(model_path)
-    logging.info(modelLocation)
+    logging.info(model_location)
     model = models.__dict__[args.arch](num_classes=10, length=args.num_seg, backbone=args.backbone)
 
     if torch.cuda.device_count() > 1:
@@ -387,11 +391,11 @@ def build_model_validate():
 
 
 def build_model_continue():
-    modelLocation = "./checkpoints/" + args.dataset + \
-                    "_" + args.arch + "_split" + str(args.split)
-    model_path = os.path.join(modelLocation, 'model_best.pth.tar')
+    model_location = f"./checkpoints/{args.loss}_{args.dataset}_{args.arch}" \
+                     f"{args.backbone}_{args.tag}"
+    model_path = os.path.join(model_location, 'model_best.pth.tar')
     params = torch.load(model_path)
-    logging.info(modelLocation)
+    logging.info(model_location)
     model = models.__dict__[args.arch](
         num_classes=10, length=args.num_seg)
 

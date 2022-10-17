@@ -45,14 +45,16 @@ We run the experiments with two NVIDIA V100 16GB GPU. Please use the same settin
 
 You should get best top 1 validation accuracy at 72.187 and with minimum loss of 0.9719.
 ```
-CUDA_VISIBLE_DEVICES=0,1 python darknorm.py --batch-size=12 --workers 16 --arch DarkNorm --lr 0.0001 --tag triv_norm_8888 --seed 8888
+CUDA_VISIBLE_DEVICES=0,1 python darknorm.py --batch-size=12 --workers 16 --arch DarkNorm --lr 0.0001 --tag triv_norm_1234 --seed 1234
 ```
 
 [//]: # (To continue the training from the best model, add -c. To evaluate the single clip single crop performance of best model, add -e)
 
 ## Testing
-
-```
+Ensure that the test videos is in `datasets/ee6222/test`.
+The frames will be extracted to `datasets/EE6222_frames_test`.
+```bash
+python utils/video_to_frame_test.py
 ## todo
 ```
 
