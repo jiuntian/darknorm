@@ -5,6 +5,7 @@ __pycache__/
 .ipynb_checkpoints/
 datasets/ee6222
 datasets/EE6222_frames/
+datasets/EE6222_frames_test/
 datasets/EE6222_frames.zip
 train_*.csv
 validate_*.csv
