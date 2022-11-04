@@ -1,6 +1,7 @@
 # DarkNorm
 DarkNorm, a simple dark standardization and Video TrivialAugment is all you need for 
 hyperparameter-less action recognition in dark.
+To ensure fully reproducibility, this repository uses deterministic operations and user-specified seed.
 
 This repository is modeling on the foundation of DarkLight pytorch code. Thanks the author(s) for their great work.
 
@@ -54,16 +55,22 @@ CUDA_VISIBLE_DEVICES=0,1 python darknorm.py --batch-size=12 --workers 16 --arch 
 
 [//]: # (To continue the training from the best model, add -c. To evaluate the single clip single crop performance of best model, add -e)
 
-## Testing
+## Reproduce Testing Results
+Test Video is available at [HERE](https://entuedu-my.sharepoint.com/:u:/g/personal/jiuntian001_e_ntu_edu_sg/EeXx_q612BhIsKT6_KISY0gBznyU3g60iQJb_--qrXIb0w?e=i8JnAe).
 Ensure that the test videos is in `datasets/ee6222/test`.
 The frames will be extracted to `datasets/EE6222_frames_test`.
+Download trained model at 
+[HERE](https://entuedu-my.sharepoint.com/:u:/g/personal/jiuntian001_e_ntu_edu_sg/EcMFXQ2p48xJnGB6g-o4PFIBvxc3EttxIs9Z5n27oMGNqw?e=53NGaM) 
+and extract at root folder. There would be some trained checkpoints in `checkpoints` folder.
 ```bash
+# extract frames
 python utils/video_to_frame_test.py
+# extract labels
 sed -i '0,/^/s//VideoID\tClassID\tVideo\n/' datasets/ee6222/test.txt
 python utils/csv_to_split_test.py
 cp test_split1.txt datasets/settings/EE6222/test_split1.txt
-
-# todo
+# to evaluate
+python eval.py --gpu 0 --ckpt checkpoints/gamma_ce_EE6222_DarkNormr18_split1_triv_norm_reprod_1234
 ```
 
 ## Related Projects
