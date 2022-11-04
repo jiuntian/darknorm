@@ -16,7 +16,7 @@ conda env create -f requirements.yml -n darknorm
 conda activate darknorm
 ```
 
-Note: this project needs the CUDA 11.3
+Note: this project needs the CUDA 10.2
 
 ## Dataset Preparation
 
