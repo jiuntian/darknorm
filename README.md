@@ -57,8 +57,8 @@ CUDA_VISIBLE_DEVICES=0,1 python darknorm.py --batch-size=12 --workers 16 --arch 
 
 ## Reproduce Testing Results
 Test Video is available at [HERE](https://entuedu-my.sharepoint.com/:u:/g/personal/jiuntian001_e_ntu_edu_sg/EeXx_q612BhIsKT6_KISY0gBznyU3g60iQJb_--qrXIb0w?e=i8JnAe).
-Ensure that the test videos is in `datasets/ee6222/test`.
-The frames will be extracted to `datasets/EE6222_frames_test`.
+Ensure that all the test videos is extracted in `datasets/ee6222/test` and test.txt is extracted at `datasets/ee6222/test.txt`.
+The frames will be extracted to `datasets/EE6222_frames_test`. It should take a few minutes.
 Download trained model at 
 [HERE](https://entuedu-my.sharepoint.com/:u:/g/personal/jiuntian001_e_ntu_edu_sg/EcMFXQ2p48xJnGB6g-o4PFIBvxc3EttxIs9Z5n27oMGNqw?e=53NGaM) 
 and extract at root folder. There would be some trained checkpoints in `checkpoints` folder.
@@ -66,7 +66,7 @@ and extract at root folder. There would be some trained checkpoints in `checkpoi
 # extract frames
 python utils/video_to_frame_test.py
 # extract labels
-sed -i '0,/^/s//VideoID\tClassID\tVideo\n/' datasets/ee6222/test.txt
+sed -i '0,/^/s//VideoID\tClassID\tVideo\n/' datasets/ee6222/test.txt # please run this once only
 python utils/csv_to_split_test.py
 cp test_split1.txt datasets/settings/EE6222/test_split1.txt
 # to evaluate
