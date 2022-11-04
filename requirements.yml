@@ -1,4 +1,4 @@
-name: darklight
+name: darknorm
 channels:
   - pytorch
   - conda-forge

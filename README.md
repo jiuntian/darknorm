@@ -10,6 +10,8 @@ This repository is modeling on the foundation of DarkLight pytorch code. Thanks 
 The code runs on Python 3.8. You can create a conda environment with all the dependencies by running 
 
 ```bash
+git clone https://github.com/jiuntian/darknorm.git
+cd darknorm
 conda env create -f requirements.yml -n darknorm
 conda activate darknorm
 ```
