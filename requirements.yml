@@ -9,8 +9,8 @@ dependencies:
   - pip=21.0.1
   - python=3.8
   - cudatoolkit=11.3
-  - pytorch=1.8.1
-  - torchvision=0.8.2
+  - pytorch=1.12.1
+  - torchvision=0.13.1
   - six
   - pip:
     - tensorboardx==2.3.0
