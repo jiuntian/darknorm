@@ -75,11 +75,5 @@ python eval.py --gpu 0 --ckpt checkpoints/gamma_ce_EE6222_DarkNormr18_split1_tri
 
 ## Related Projects
 We thank author of Darklight for the base of this repo.
-[Darklight](https://github.com/Ticuby/Darklight-Pytorch): Darklight-Pytorch
-
-[LateTemporalModeling3DCNN](https://github.com/artest08/LateTemporalModeling3DCNN):2_Plus_1D_BERT
-
-
-
-
-
+1. [Darklight](https://github.com/Ticuby/Darklight-Pytorch): Darklight-Pytorch
+2. [LateTemporalModeling3DCNN](https://github.com/artest08/LateTemporalModeling3DCNN):2_Plus_1D_BERT
