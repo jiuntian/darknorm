@@ -53,8 +53,6 @@ You should get best top 1 validation accuracy at 72.187 and with minimum loss of
 CUDA_VISIBLE_DEVICES=0,1 python darknorm.py --batch-size=12 --workers 16 --arch DarkNorm --lr 0.0001 --tag triv_norm_1234 --seed 1234
 ```
 
-[//]: # (To continue the training from the best model, add -c. To evaluate the single clip single crop performance of best model, add -e)
-
 ## Reproduce Testing Results
 Test Video is available at [HERE](https://entuedu-my.sharepoint.com/:u:/g/personal/jiuntian001_e_ntu_edu_sg/EeXx_q612BhIsKT6_KISY0gBznyU3g60iQJb_--qrXIb0w?e=i8JnAe).
 Ensure that the test videos is in `datasets/ee6222/test`.
